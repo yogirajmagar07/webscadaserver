@@ -1,5 +1,4 @@
 import os
-import uuid
 from datetime import datetime
 import pytz
 from flask import Flask, request, jsonify
@@ -7,14 +6,14 @@ from azure.data.tables import TableServiceClient
 
 app = Flask(__name__)
 
-# Environment variables
+# ===== Environment Variables =====
 TABLES_CONN = os.environ.get("TABLES_CONNECTION_STRING")
 TABLE_NAME = os.environ.get("TABLE_NAME", "DeviceData")
 
 if not TABLES_CONN:
     raise RuntimeError("TABLES_CONNECTION_STRING environment variable is not set")
 
-# Create table client
+# ===== Azure Table Client =====
 service = TableServiceClient.from_connection_string(TABLES_CONN)
 table_client = service.get_table_client(TABLE_NAME)
 
@@ -27,34 +26,29 @@ except Exception:
 
 def build_entity(data: dict):
     """
-    Build Azure Table entity with:
-    - PartitionKey = deviceid (payload or default)
-    - RowKey = IST timestamp unique
+    Azure Table design:
+    PartitionKey = deviceid
+    RowKey       = YYYYMMDDHHMM  (1 record per minute)
     """
 
-    # DEFAULT DEVICE ID IF MISSING
+    # Device ID (default if missing)
     deviceid = str(data.get("deviceid", "susanad"))
 
-    # Convert timestamp to IST
-    utc_now = datetime.utcnow()
-    ist_timezone = pytz.timezone("Asia/Kolkata")
-    ist_time = utc_now.replace(tzinfo=pytz.utc).astimezone(ist_timezone)
-    ist_timestamp = ist_time.strftime("%Y-%m-%d %H:%M:%S")
+    # IST timestamp
+    ist_tz = pytz.timezone("Asia/Kolkata")
+    ist_time = datetime.utcnow().replace(tzinfo=pytz.utc).astimezone(ist_tz)
 
-    # Safe RowKey (no :, space, /)
-    safe_ts = ist_timestamp.replace(":", "-").replace(" ", "_").replace("/", "-")
-    rowkey = f"{safe_ts}_{uuid.uuid4().hex}"
+    rowkey = ist_time.strftime("%Y%m%d%H%M")
+    timestamp_ist = ist_time.strftime("%Y-%m-%d %H:%M:%S")
 
     entity = {
         "PartitionKey": deviceid,
         "RowKey": rowkey,
-        "TimestampIST": ist_timestamp
+        "TimestampIST": timestamp_ist
     }
 
-    # Add all payload fields
+    # Add SCADA payload fields
     for key, value in data.items():
-
-        # Avoid overwriting PartitionKey again
         if key == "deviceid":
             continue
 
@@ -75,7 +69,10 @@ def ingest():
 
     try:
         entity = build_entity(data)
-        table_client.create_entity(entity=entity)
+
+        # Retry-safe (replaces same-minute data if resent)
+        table_client.upsert_entity(entity=entity, mode="replace")
+
     except Exception as e:
         return jsonify({"error": "insert failed", "details": str(e)}), 500
 
@@ -89,4 +86,4 @@ def health():
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
-    app.run(host='0.0.0.0', port=port)
+    app.run(host="0.0.0.0", port=port)
