@@ -2,3 +2,5 @@ flask==2.3.3
 azure-data-tables==12.4.4
 pytz==2023.3
 gunicorn==21.2.0
+pandas==2.2.2
+reportlab==4.1.0
