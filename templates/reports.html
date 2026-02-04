@@ -51,7 +51,7 @@ button{
 
 <div class="header">
 
-    Sagar Pride Flow Meter Dashboard
+    TAURUS 24 Flow Meter Dashboard
 
     <div style="float:right">
         <a href="/" style="color:white;margin-right:15px;">Dashboard</a>
@@ -92,13 +92,47 @@ button{
 <br><br>
 
 <button class="btn-blue" onclick="generateReport()">Generate Report</button>
-<button class="btn-green">Download CSV</button>
-<button class="btn-red">Download PDF</button>
+<button class="btn-green" onclick="downloadCSV()">Download CSV</button>
+<button class="btn-red" onclick="downloadPDF()">Download PDF</button>
 
 </div>
 
 
 <script>
+
+function getParams(){
+
+    let start = document.getElementById("startTime").value;
+    let end = document.getElementById("endTime").value;
+    let type = document.getElementById("reportType").value;
+
+    if(!start || !end){
+        alert("Please select Start and End time");
+        return null;
+    }
+
+    return `?type=${type}&start=${start}&end=${end}`;
+}
+
+
+function downloadCSV(){
+
+    let params = getParams();
+    if(!params) return;
+
+    window.location = "/download_csv" + params;
+}
+
+
+function downloadPDF(){
+
+    let params = getParams();
+    if(!params) return;
+
+    window.location = "/download_pdf" + params;
+}
+
+
 function generateReport(){
 
     let start = document.getElementById("startTime").value;
@@ -106,8 +140,14 @@ function generateReport(){
     let type = document.getElementById("reportType").value;
     let interval = document.getElementById("interval").value;
 
-    alert(`Generating report for ${type}`);
+    if(!start || !end){
+        alert("Please select Start and End time");
+        return;
+    }
+
+    alert(`Report ready for ${type} (${interval})`);
 }
+
 </script>
 
 </body>
