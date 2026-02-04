@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Reports</title>
+
+<style>
+body{
+    font-family: Arial;
+    background:#e9e9e9;
+    margin:0;
+}
+
+.header{
+    background:black;
+    color:white;
+    padding:15px;
+    font-size:20px;
+}
+
+.reportBox{
+    background:#234461;
+    margin:20px;
+    padding:20px;
+    border-radius:12px;
+    color:white;
+}
+
+input, select{
+    padding:8px;
+    border-radius:6px;
+    border:none;
+    margin-right:10px;
+}
+
+button{
+    padding:8px 14px;
+    border:none;
+    border-radius:6px;
+    cursor:pointer;
+}
+
+.btn-blue{background:#2e86de;color:white;}
+.btn-green{background:#27ae60;color:white;}
+.btn-red{background:#e74c3c;color:white;}
+</style>
+
+</head>
+
+<body>
+
+<div class="header">
+
+    Sagar Pride Flow Meter Dashboard
+
+    <div style="float:right">
+        <a href="/" style="color:white;margin-right:15px;">Dashboard</a>
+        <a href="/reports" style="color:white;margin-right:15px;">Reports</a>
+
+        <a href="/logout">
+            <button class="btn-red">Logout</button>
+        </a>
+    </div>
+
+</div>
+
+
+<div class="reportBox">
+
+<h3>Generate Report</h3>
+
+<label>Start Time</label>
+<input type="datetime-local" id="startTime">
+
+<label>End Time</label>
+<input type="datetime-local" id="endTime">
+
+<label>Select Report</label>
+<select id="reportType">
+    <option value="FT1">PME - Main Engine</option>
+    <option value="FT3">SME</option>
+    <option value="FT5">PAE</option>
+    <option value="FT7">SAE</option>
+</select>
+
+<label>Interval</label>
+<select id="interval">
+    <option value="minute">Minute Wise</option>
+    <option value="hour">Hour Wise</option>
+</select>
+
+<br><br>
+
+<button class="btn-blue" onclick="generateReport()">Generate Report</button>
+<button class="btn-green">Download CSV</button>
+<button class="btn-red">Download PDF</button>
+
+</div>
+
+
+<script>
+function generateReport(){
+
+    let start = document.getElementById("startTime").value;
+    let end = document.getElementById("endTime").value;
+    let type = document.getElementById("reportType").value;
+    let interval = document.getElementById("interval").value;
+
+    alert(`Generating report for ${type}`);
+}
+</script>
+
+</body>
+</html>
