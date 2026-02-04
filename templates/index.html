@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Flow Meter Dashboard</title>
+
+<style>
+
+body{
+    font-family: Arial;
+    background:#e9e9e9;
+    margin:0;
+}
+
+.header{
+    background:black;
+    color:white;
+    padding:15px;
+    font-size:20px;
+}
+
+.container{
+    display:grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap:20px;
+    padding:20px;
+}
+
+.card{
+    background:#234461;
+    border-radius:10px;
+    padding:15px;
+    color:white;
+}
+
+.card h3{
+    margin-top:0;
+    border-bottom:1px solid rgba(255,255,255,0.2);
+    padding-bottom:6px;
+}
+
+/* Row layout */
+.row{
+    display:grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap:10px;
+    margin-top:10px;
+}
+
+.label{
+    font-size:12px;
+    opacity:0.8;
+}
+
+.valueBox{
+    background:black;
+    border-radius:6px;
+    padding:12px;
+    text-align:center;
+    font-size:18px;
+    margin-top:3px;
+}
+
+.block{
+    display:flex;
+    flex-direction:column;
+}
+
+</style>
+</head>
+
+<body>
+
+<div class="header">
+
+    <span style="font-weight:bold">Tauras Flow Meter Dashboard</span>
+
+    <div style="float:right">
+
+        <a href="/" style="color:white;margin-right:15px;">Dashboard</a>
+        <a href="/reports" style="color:white;margin-right:15px;">Reports</a>
+
+        <a href="/logout">
+            <button style="background:#e74c3c;color:white;border:none;padding:6px 12px;border-radius:5px;">
+                Logout
+            </button>
+        </a>
+
+    </div>
+
+</div>
+
+
+<div class="container" id="dashboard"></div>
+
+<script>
+
+// Panel mapping
+const panels = [
+    {title:"PME INLET", prefix:"FT1"},
+    {title:"PME OUTLET", prefix:"FT2"},
+    {title:"SME INLET", prefix:"FT3"},
+    {title:"SME OUTLET", prefix:"FT4"},
+    {title:"PAE INLET", prefix:"FT5"},
+    {title:"PAE OUTLET", prefix:"FT6"},
+    {title:"SAE INLET", prefix:"FT7"},
+    {title:"SAE OUTLET", prefix:"FT8"}
+];
+
+// Row structure
+const row1 = [
+    {label:"Mass Flow (T/H)", tag:"MassFlow"},
+    {label:"Volume Flow (L/H)", tag:"VolumeFlow"},
+    {label:"Density (kg/m³)", tag:"Density"}
+];
+
+const row2 = [
+    {label:"Total Flow (T)", tag:"Masstotal"},
+    {label:"Total Flow (L)", tag:"Volumetotal"},
+    {label:"Temperature (°C)", tag:"Temp"}
+];
+
+// Build dashboard
+function buildDashboard(){
+
+    let container = document.getElementById("dashboard");
+
+    panels.forEach(panel => {
+
+        let card = document.createElement("div");
+        card.className = "card";
+
+        card.innerHTML += `<h3>${panel.title}</h3>`;
+
+        // Row 1
+        card.innerHTML += buildRow(panel.prefix, row1);
+
+        // Row 2
+        card.innerHTML += buildRow(panel.prefix, row2);
+
+        container.appendChild(card);
+    });
+}
+
+// Helper to build rows
+function buildRow(prefix, fields){
+
+    let html = `<div class="row">`;
+
+    fields.forEach(f => {
+
+        let id = prefix + f.tag;
+
+        html += `
+            <div class="block">
+                <div class="label">${f.label}</div>
+                <div class="valueBox" id="${id}">0</div>
+            </div>
+        `;
+    });
+
+    html += `</div>`;
+    return html;
+}
+
+buildDashboard();
+
+
+// Load data
+async function loadData(){
+
+    try{
+        let res = await fetch("/api/latest");
+        let data = await res.json();
+
+        if(data.length === 0) return;
+
+        let latest = data[0];
+
+        panels.forEach(panel => {
+
+            [...row1, ...row2].forEach(f => {
+
+                let tag = panel.prefix + f.tag;
+                let el = document.getElementById(tag);
+
+                if(el){
+                    el.innerText = latest[tag] ?? 0;
+                }
+
+            });
+        });
+
+        document.getElementById("lastUpdate").innerText =
+            latest.TimestampIST || "--";
+
+    }catch(e){
+        console.log(e);
+    }
+}
+
+setInterval(loadData, 5000);
+loadData();
+
+</script>
+
+</body>
+</html>
