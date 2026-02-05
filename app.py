@@ -143,19 +143,24 @@ def latest():
 # =========================
 # Fetch Records For Reports
 # =========================
+def parse_dt(value):
+    try:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        return datetime.strptime(value, "%Y-%m-%d %H:%M")
+
+
 def fetch_records(prefix, start, end):
 
-    partition = "susanad"
-    query = f"PartitionKey eq '{partition}'"
+    deviceid = "susanad"
 
-    entities = table_client.query_entities(query)
+    start_dt = parse_dt(start)
+    end_dt = parse_dt(end)
 
     records = []
 
-    fmt = "%Y-%m-%d %H:%M:%S"
-
-    start_dt = datetime.strptime(start, fmt)
-    end_dt = datetime.strptime(end, fmt)
+    query = f"PartitionKey eq '{deviceid}'"
+    entities = table_client.query_entities(query)
 
     for e in entities:
 
@@ -163,11 +168,9 @@ def fetch_records(prefix, start, end):
         if not ts:
             continue
 
-        # ✅ FIX 3 — Proper Datetime Comparison
-        ts_dt = datetime.strptime(ts, fmt)
+        ts_dt = parse_dt(ts)
 
         if start_dt <= ts_dt <= end_dt:
-
             records.append({
                 "Timestamp": ts,
                 "MassFlow": e.get(prefix + "MassFlow"),
@@ -179,6 +182,7 @@ def fetch_records(prefix, start, end):
             })
 
     return records
+
 
 
 # =========================
@@ -250,3 +254,4 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
