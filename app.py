@@ -16,12 +16,15 @@ app.secret_key = "super-secret-key"
 # =========================
 TABLES_CONN = os.environ.get("TABLES_CONNECTION_STRING")
 TABLE_NAME = os.environ.get("TABLE_NAME", "DeviceData")
+TABLE_NAME_2 = os.environ.get("TABLE_NAME", "ScadaData")
 
 service = TableServiceClient.from_connection_string(TABLES_CONN)
 table_client = service.get_table_client(TABLE_NAME)
+table_client_2 = service.get_table_client(TABLE_NAME_2)
 
 try:
     table_client.create_table()
+    table_client_2.create_table()
 except:
     pass
 
@@ -121,6 +124,27 @@ def ingest():
         entity = build_entity(data)
 
         table_client.upsert_entity(entity=entity, mode="replace")
+
+        # ✅ FIX 2 — Multi Device Cache
+        latest_cache[entity["PartitionKey"]] = entity
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"status": "ok"})
+
+@app.route("/load", methods=["POST"])
+def load_data():
+
+    if not request.is_json:
+        return jsonify({"error": "JSON required"}), 400
+
+    data = request.get_json()
+
+    try:
+        entity = build_entity(data)
+
+        table_client_2.upsert_entity(entity=entity, mode="replace")
 
         # ✅ FIX 2 — Multi Device Cache
         latest_cache[entity["PartitionKey"]] = entity
@@ -254,4 +278,5 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
