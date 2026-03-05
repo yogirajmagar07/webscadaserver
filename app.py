@@ -16,7 +16,7 @@ app.secret_key = "super-secret-key"
 # =========================
 TABLES_CONN = os.environ.get("TABLES_CONNECTION_STRING")
 TABLE_NAME = os.environ.get("TABLE_NAME", "DeviceData")
-TABLE_NAME_2 = os.environ.get("TABLE_NAME", "ScadaData")
+TABLE_NAME_2 = os.environ.get("TABLE_NAME_2", "ScadaData")
 
 service = TableServiceClient.from_connection_string(TABLES_CONN)
 table_client = service.get_table_client(TABLE_NAME)
@@ -278,5 +278,6 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
