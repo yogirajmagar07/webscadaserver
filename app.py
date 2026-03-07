@@ -1,15 +1,17 @@
 import os
-from datetime import datetime
+from datetime import datetime, timedelta
 import pytz
-from flask import Flask, request, jsonify, send_file, render_template, session, redirect
+from flask import Flask, request, jsonify, send_file, render_template, session, redirect, Response
 from azure.data.tables import TableServiceClient
 import pandas as pd
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table
 from reportlab.lib.pagesizes import letter
+import json
 
 app = Flask(__name__)
 app.secret_key = "super-secret-key"
+app.config['JSONIFY_PRETTYPRINT_REGULAR'] = True
 
 # =========================
 # Azure Table Config
@@ -163,6 +165,98 @@ def load_data():
 def latest():
     return jsonify(list(latest_cache.values()))
 
+# =========================
+# Fuel Consumption API
+# =========================
+@app.route("/API")
+def api_readings():
+
+    from_time = request.args.get("fromTime")
+    to_time = request.args.get("toTime")
+    deviceid = "susanmpa"
+
+    if not from_time or not to_time:
+        return jsonify({"error": "fromTime and toTime required"}), 400
+
+    try:
+        start_dt = datetime.strptime(from_time, "%Y-%m-%d %H:%M:%S")
+        end_dt = datetime.strptime(to_time, "%Y-%m-%d %H:%M:%S")
+    except:
+        return jsonify({"error": "Invalid datetime format"}), 400
+
+    readings = []
+
+    try:
+
+        # Azure optimized query
+        query = (
+            f"PartitionKey eq '{deviceid}' "
+            f"and TimestampIST ge '{from_time}' "
+            f"and TimestampIST le '{to_time}'"
+        )
+
+        entities = list(table_client_2.query_entities(query))
+
+        current_start = start_dt
+
+        while current_start < end_dt:
+
+            current_end = min(current_start + timedelta(hours=1), end_dt)
+
+            total_engine1 = 0
+            total_engine2 = 0
+
+            for e in entities:
+
+                ts = e.get("TimestampIST")
+                if not ts:
+                    continue
+
+                try:
+                    ts_dt = datetime.strptime(ts, "%Y-%m-%d %H:%M:%S")
+                except:
+                    continue
+
+                if current_start <= ts_dt < current_end:
+
+                    total_engine1 += float(e.get("FT1MassFlow") or 0)
+                    total_engine2 += float(e.get("FT2MassFlow") or 0)
+
+            total_main = total_engine1 + total_engine2
+
+            readings.append({
+                "measurementStartTime": current_start.strftime("%Y-%m-%d %H:%M:%S"),
+                "measurementEndTime": (current_end - timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S"),
+                "kind": "VESSEL",
+                "mmsi": "419001409",
+                "imo": "933632",
+                "consumption": {
+                    "mainEnginesTotal": round(total_main, 3),
+                    "generatorsTotal": 0,
+                    "mainEngines": [
+                        {
+                            "name": "Main Engine 1",
+                            "value": round(total_engine1, 3)
+                        },
+                        {
+                            "name": "Main Engine 2",
+                            "value": round(total_engine2, 3)
+                        }
+                    ],
+                    "generators": [
+                        {"name": "Generator 1", "value": 0},
+                        {"name": "Generator 2", "value": 0}
+                    ]
+                }
+            })
+
+            current_start = current_end
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return Response(json.dumps({"readings": readings}, indent=4), mimetype="application/json")
+
 
 # =========================
 # Fetch Records For Reports
@@ -278,6 +372,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
