@@ -500,6 +500,122 @@ def download_csv():
 #         as_attachment=True
 #     )
 
+# @app.route("/download_pdf")
+# @login_required
+# def download_pdf():
+#     try:
+#         prefix = request.args.get("type")
+#         start = request.args.get("start").replace("T", " ")
+#         end = request.args.get("end").replace("T", " ")
+        
+#         print(f"PDF Request - Prefix: {prefix}, Start: {start}, End: {end}")  # Debug
+        
+#         # Fetch data
+#         data = fetch_records(prefix, start, end)
+        
+#         print(f"Data retrieved: {len(data)} records")  # Debug
+        
+#         buffer = BytesIO()
+        
+#         if not data or len(data) == 0:
+#             # Create PDF with no data message
+#             from reportlab.pdfgen import canvas
+#             from reportlab.lib.pagesizes import letter
+            
+#             c = canvas.Canvas(buffer, pagesize=letter)
+#             c.setFont("Helvetica-Bold", 16)
+#             c.drawString(100, 750, f"No Data Found for {prefix}")
+            
+#             c.setFont("Helvetica", 12)
+#             c.drawString(100, 700, f"From: {start}")
+#             c.drawString(100, 680, f"To: {end}")
+#             c.drawString(100, 660, f"Device: susanad")
+#             c.drawString(100, 640, f"Time Range: {(parse_dt(end) - parse_dt(start)).total_seconds()/3600:.1f} hours")
+            
+#             c.setFont("Helvetica", 10)
+#             c.drawString(100, 600, "Possible issues:")
+#             c.drawString(120, 580, "1. No data exists for this time range")
+#             c.drawString(120, 560, "2. The meter prefix might be incorrect")
+#             c.drawString(120, 540, "3. Check if the device ID 'susanad' has data")
+            
+#             c.save()
+#         else:
+#             # Create PDF with data
+#             from reportlab.lib.pagesizes import landscape, letter
+#             from reportlab.pdfgen import canvas
+            
+#             c = canvas.Canvas(buffer, pagesize=landscape(letter))
+            
+#             # Header
+#             c.setFont("Helvetica-Bold", 14)
+#             c.drawString(50, 550, f"{prefix} Flow Meter Report")
+            
+#             c.setFont("Helvetica", 10)
+#             c.drawString(50, 530, f"From: {start}")
+#             c.drawString(350, 530, f"To: {end}")
+#             c.drawString(50, 515, f"Total Records: {len(data)}")
+            
+#             # Table headers
+#             y = 480
+#             c.setFont("Helvetica-Bold", 8)
+#             c.drawString(50, y, "Timestamp")
+#             c.drawString(200, y, "Mass Flow")
+#             c.drawString(270, y, "Mass Total")
+#             c.drawString(340, y, "Volume Flow")
+#             c.drawString(410, y, "Volume Total")
+#             c.drawString(480, y, "Density")
+#             c.drawString(550, y, "Temp")
+            
+#             y -= 15
+#             c.setFont("Helvetica", 7)
+            
+#             # Show first 30 records
+#             for i, row in enumerate(data[:30]):
+#                 if y < 50:  # New page
+#                     c.showPage()
+#                     y = 550
+#                     c.setFont("Helvetica-Bold", 8)
+#                     c.drawString(50, y, "Timestamp (continued)")
+#                     y -= 15
+#                     c.setFont("Helvetica", 7)
+                
+#                 try:
+#                     c.drawString(50, y, str(row.get("Timestamp", ""))[:16])
+#                     c.drawString(200, y, f"{float(row.get('MassFlow', 0) or 0):.5f}")
+#                     c.drawString(270, y, f"{float(row.get('Masstotal', 0) or 0):.5f}")
+#                     c.drawString(340, y, f"{float(row.get('VolumeFlow', 0) or 0):.5f}")
+#                     c.drawString(410, y, f"{float(row.get('Volumetotal', 0) or 0):.5f}")
+#                     c.drawString(480, y, f"{float(row.get('Density', 0) or 0):.5f}")
+#                     c.drawString(550, y, f"{float(row.get('Temp', 0) or 0):.5f}")
+#                 except Exception as e:
+#                     print(f"Error writing row {i}: {e}")
+                
+#                 y -= 12
+            
+#             # Add summary
+#             if len(data) > 30:
+#                 c.setFont("Helvetica-Oblique", 8)
+#                 c.drawString(50, y-10, f"... and {len(data) - 30} more records")
+            
+#             c.save()
+        
+#         buffer.seek(0)
+        
+#         filename = f"{prefix}_report_{start.replace(' ', '_')}_to_{end.replace(' ', '_')}.pdf"
+        
+#         return send_file(
+#             buffer,
+#             mimetype="application/pdf",
+#             download_name=filename,
+#             as_attachment=True
+#         )
+        
+#     except Exception as e:
+#         print(f"PDF download error: {e}")
+#         import traceback
+#         traceback.print_exc()
+#         return jsonify({"error": str(e)}), 500
+
 @app.route("/download_pdf")
 @login_required
 def download_pdf():
@@ -508,94 +624,76 @@ def download_pdf():
         start = request.args.get("start").replace("T", " ")
         end = request.args.get("end").replace("T", " ")
         
-        print(f"PDF Request - Prefix: {prefix}, Start: {start}, End: {end}")  # Debug
-        
         # Fetch data
         data = fetch_records(prefix, start, end)
-        
-        print(f"Data retrieved: {len(data)} records")  # Debug
         
         buffer = BytesIO()
         
         if not data or len(data) == 0:
-            # Create PDF with no data message
             from reportlab.pdfgen import canvas
             from reportlab.lib.pagesizes import letter
             
             c = canvas.Canvas(buffer, pagesize=letter)
             c.setFont("Helvetica-Bold", 16)
             c.drawString(100, 750, f"No Data Found for {prefix}")
-            
             c.setFont("Helvetica", 12)
             c.drawString(100, 700, f"From: {start}")
             c.drawString(100, 680, f"To: {end}")
-            c.drawString(100, 660, f"Device: susanad")
-            c.drawString(100, 640, f"Time Range: {(parse_dt(end) - parse_dt(start)).total_seconds()/3600:.1f} hours")
-            
-            c.setFont("Helvetica", 10)
-            c.drawString(100, 600, "Possible issues:")
-            c.drawString(120, 580, "1. No data exists for this time range")
-            c.drawString(120, 560, "2. The meter prefix might be incorrect")
-            c.drawString(120, 540, "3. Check if the device ID 'susanad' has data")
-            
             c.save()
         else:
-            # Create PDF with data
             from reportlab.lib.pagesizes import landscape, letter
             from reportlab.pdfgen import canvas
+            from math import ceil
             
             c = canvas.Canvas(buffer, pagesize=landscape(letter))
             
-            # Header
-            c.setFont("Helvetica-Bold", 14)
-            c.drawString(50, 550, f"{prefix} Flow Meter Report")
+            # Calculate pages needed (approximately 45 records per page)
+            records_per_page = 45
+            total_pages = ceil(len(data) / records_per_page)
+            current_page = 1
             
-            c.setFont("Helvetica", 10)
-            c.drawString(50, 530, f"From: {start}")
-            c.drawString(350, 530, f"To: {end}")
-            c.drawString(50, 515, f"Total Records: {len(data)}")
-            
-            # Table headers
-            y = 480
-            c.setFont("Helvetica-Bold", 8)
-            c.drawString(50, y, "Timestamp")
-            c.drawString(200, y, "Mass Flow")
-            c.drawString(270, y, "Mass Total")
-            c.drawString(340, y, "Volume Flow")
-            c.drawString(410, y, "Volume Total")
-            c.drawString(480, y, "Density")
-            c.drawString(550, y, "Temp")
-            
-            y -= 15
-            c.setFont("Helvetica", 7)
-            
-            # Show first 30 records
-            for i, row in enumerate(data[:30]):
-                if y < 50:  # New page
+            for page_start in range(0, len(data), records_per_page):
+                page_end = min(page_start + records_per_page, len(data))
+                
+                if current_page > 1:
                     c.showPage()
-                    y = 550
-                    c.setFont("Helvetica-Bold", 8)
-                    c.drawString(50, y, "Timestamp (continued)")
-                    y -= 15
-                    c.setFont("Helvetica", 7)
                 
-                try:
+                # Header
+                c.setFont("Helvetica-Bold", 12)
+                c.drawString(50, 550, f"{prefix} Flow Meter Report - Page {current_page}/{total_pages}")
+                c.setFont("Helvetica", 10)
+                c.drawString(50, 535, f"From: {start}  To: {end}")
+                c.drawString(50, 520, f"Records: {page_start+1} to {page_end} of {len(data)}")
+                
+                # Headers
+                y = 500
+                c.setFont("Helvetica-Bold", 8)
+                c.drawString(50, y, "Timestamp")
+                c.drawString(200, y, "Mass Flow")
+                c.drawString(270, y, "Mass Total")
+                c.drawString(340, y, "Volume Flow")
+                c.drawString(410, y, "Volume Total")
+                c.drawString(480, y, "Density")
+                c.drawString(550, y, "Temp")
+                
+                y -= 15
+                c.setFont("Helvetica", 7)
+                
+                # Write ALL records for this page
+                for i, row in enumerate(data[page_start:page_end]):
+                    if y < 50:
+                        break
+                    
                     c.drawString(50, y, str(row.get("Timestamp", ""))[:16])
-                    c.drawString(200, y, f"{float(row.get('MassFlow', 0) or 0):.5f}")
-                    c.drawString(270, y, f"{float(row.get('Masstotal', 0) or 0):.5f}")
-                    c.drawString(340, y, f"{float(row.get('VolumeFlow', 0) or 0):.5f}")
-                    c.drawString(410, y, f"{float(row.get('Volumetotal', 0) or 0):.5f}")
-                    c.drawString(480, y, f"{float(row.get('Density', 0) or 0):.5f}")
-                    c.drawString(550, y, f"{float(row.get('Temp', 0) or 0):.5f}")
-                except Exception as e:
-                    print(f"Error writing row {i}: {e}")
+                    c.drawString(200, y, f"{float(row.get('MassFlow',0)):.5f}")
+                    c.drawString(270, y, f"{float(row.get('Masstotal',0)):.5f}")
+                    c.drawString(340, y, f"{float(row.get('VolumeFlow',0)):.5f}")
+                    c.drawString(410, y, f"{float(row.get('Volumetotal',0)):.5f}")
+                    c.drawString(480, y, f"{float(row.get('Density',0)):.5f}")
+                    c.drawString(550, y, f"{float(row.get('Temp',0)):.5f}")
+                    y -= 12
                 
-                y -= 12
-            
-            # Add summary
-            if len(data) > 30:
-                c.setFont("Helvetica-Oblique", 8)
-                c.drawString(50, y-10, f"... and {len(data) - 30} more records")
+                current_page += 1
             
             c.save()
         
@@ -612,8 +710,6 @@ def download_pdf():
         
     except Exception as e:
         print(f"PDF download error: {e}")
-        import traceback
-        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
 
 # =========================
@@ -622,6 +718,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
