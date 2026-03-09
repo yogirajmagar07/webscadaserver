@@ -100,6 +100,7 @@ body {
     border-radius: 5px;
     font-size: 12px;
     color: #718096;
+    border: 1px dashed #cbd5e0;
 }
 
 .demo-credentials p {
@@ -108,6 +109,14 @@ body {
 
 .demo-credentials strong {
     color: #4a5568;
+}
+
+.demo-credentials .cred-box {
+    background: #edf2f7;
+    padding: 8px;
+    border-radius: 4px;
+    font-family: monospace;
+    margin-top: 8px;
 }
 </style>
 </head>
@@ -123,16 +132,25 @@ body {
         <form onsubmit="handleLogin(event)">
             <div class="form-group">
                 <label>Username</label>
-                <input type="text" id="username" value="admin" required autofocus>
+                <input type="text" id="username" placeholder="Enter username" required autofocus>
             </div>
             
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="password" value="admin123" required>
+                <input type="password" id="password" placeholder="Enter password" required>
             </div>
             
             <button type="submit" class="login-btn">Login</button>
         </form>
+        
+        <div class="demo-credentials">
+            <p><strong>🔑 Demo Credentials:</strong></p>
+            <div class="cred-box">
+                <p><strong>Username:</strong> admin</p>
+                <p><strong>Password:</strong> admin123</p>
+            </div>
+            <p style="margin-top: 8px; font-style: italic;">Please use the above credentials to login</p>
+        </div>
     </div>
 
     <script>
@@ -142,6 +160,23 @@ body {
         let username = document.getElementById('username').value;
         let password = document.getElementById('password').value;
         let errorDiv = document.getElementById('errorMessage');
+        
+        // Clear any previous error messages
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+        
+        // Basic validation
+        if (!username.trim() || !password.trim()) {
+            errorDiv.style.display = 'block';
+            errorDiv.textContent = 'Please enter both username and password';
+            return;
+        }
+        
+        // Show loading state
+        let loginBtn = document.querySelector('.login-btn');
+        let originalText = loginBtn.textContent;
+        loginBtn.textContent = 'Logging in...';
+        loginBtn.disabled = true;
         
         try {
             let response = await fetch('/api/login', {
@@ -158,12 +193,33 @@ body {
                 window.location.href = '/dashboard';
             } else {
                 errorDiv.style.display = 'block';
-                errorDiv.textContent = data.error || 'Invalid credentials';
+                errorDiv.textContent = data.error || 'Invalid username or password';
+                // Clear password field on error
+                document.getElementById('password').value = '';
+                document.getElementById('password').focus();
             }
         } catch (error) {
             errorDiv.style.display = 'block';
             errorDiv.textContent = 'Login failed. Please try again.';
+            console.error('Login error:', error);
+        } finally {
+            // Reset button state
+            loginBtn.textContent = originalText;
+            loginBtn.disabled = false;
         }
+    }
+
+    // Optional: Add Enter key support
+    document.getElementById('password').addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            handleLogin(e);
+        }
+    });
+
+    // Clear any cached credentials on page load
+    window.onload = function() {
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
     }
     </script>
 </body>
