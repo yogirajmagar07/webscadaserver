@@ -90,72 +90,6 @@ button:hover {
     color:white;
 }
 
-.preview-section {
-    margin-top: 30px;
-    background: #1a3450;
-    border-radius: 8px;
-    padding: 15px;
-    display: none;
-}
-
-.preview-section h4 {
-    margin-top: 0;
-    color: #ffd700;
-    border-bottom: 1px solid #3a4a60;
-    padding-bottom: 10px;
-}
-
-.summary-stats {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-    gap: 15px;
-    margin: 20px 0;
-}
-
-.stat-card {
-    background: #2c3e50;
-    border-radius: 8px;
-    padding: 15px;
-    text-align: center;
-    border-left: 4px solid #ffd700;
-}
-
-.stat-card h5 {
-    margin: 0 0 10px 0;
-    color: #ffd700;
-    font-size: 14px;
-}
-
-.stat-value {
-    font-size: 20px;
-    font-weight: bold;
-    color: white;
-}
-
-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-    font-size: 14px;
-    word-wrap: break-word;
-}
-
-th {
-    background: #2c3e50;
-    color: white;
-    padding: 10px;
-    text-align: left;
-}
-
-td {
-    padding: 8px 10px;
-    border-bottom: 1px solid #3a4a60;
-}
-
-tr:hover {
-    background: #1e3a5a;
-}
-
 .status-message {
     margin: 10px 0;
     padding: 10px;
@@ -194,12 +128,6 @@ tr:hover {
     100% { transform: rotate(360deg); }
 }
 
-.record-count {
-    margin-top: 10px;
-    font-size: 14px;
-    color: #ffd700;
-}
-
 /* Responsive */
 @media screen and (max-width: 768px){
     .filter-section {
@@ -209,10 +137,6 @@ tr:hover {
     button {
         width: 100%;
         margin-right: 0;
-    }
-    
-    .summary-stats {
-        grid-template-columns: 1fr;
     }
 }
 </style>
@@ -268,43 +192,9 @@ tr:hover {
     </div>
 
     <div style="margin-top: 20px;">
-        <button class="btn-blue" onclick="previewData()" id="previewBtn">
-            <span id="previewBtnText">🔍 Preview Data</span>
-            <span id="previewBtnLoading" class="loading" style="display: none;"></span>
-        </button>
         <button class="btn-green" onclick="downloadCSV()" id="csvBtn">📥 Download CSV</button>
         <button class="btn-purple" onclick="downloadPDF()" id="pdfBtn">📄 Download PDF</button>
         <button class="btn-red" onclick="resetFilters()">🔄 Reset</button>
-    </div>
-
-    <!-- Preview Section -->
-    <div class="preview-section" id="previewSection">
-        <h4>📋 Data Preview</h4>
-        
-        <div class="summary-stats" id="summaryStats"></div>
-        
-        <div class="record-count" id="recordCount"></div>
-        
-        <div style="overflow-x: auto;">
-            <table id="previewTable">
-                <thead>
-                    <tr id="previewHeader">
-                        <th>Timestamp</th>
-                        <th>Mass Flow (T/H)</th>
-                        <th>Mass Total (T)</th>
-                        <th>Volume Flow (L/H)</th>
-                        <th>Volume Total (L)</th>
-                        <th>Density (kg/m³)</th>
-                        <th>Temperature (°C)</th>
-                    </tr>
-                </thead>
-                <tbody id="previewBody">
-                    <tr>
-                        <td colspan="7" style="text-align: center;">No data to preview. Click "Preview Data" to fetch records.</td>
-                    </tr>
-                </tbody>
-            </table>
-        </div>
     </div>
 
 </div>
@@ -321,207 +211,106 @@ function showStatus(message, type) {
     }, 5000);
 }
 
-function setLoading(isLoading, buttonId = 'previewBtn') {
+function setLoading(isLoading, buttonId) {
     let btn = document.getElementById(buttonId);
-    let btnText = document.getElementById(buttonId + 'Text');
-    let btnLoading = document.getElementById(buttonId + 'Loading');
-    let csvBtn = document.getElementById('csvBtn');
-    let pdfBtn = document.getElementById('pdfBtn');
-    
     if (isLoading) {
         btn.disabled = true;
-        csvBtn.disabled = true;
-        pdfBtn.disabled = true;
-        if (btnText) btnText.style.display = 'none';
-        if (btnLoading) btnLoading.style.display = 'inline-block';
-        btn.style.opacity = '0.7';
+        btn.innerHTML = '<span class="loading"></span> Processing...';
     } else {
         btn.disabled = false;
-        csvBtn.disabled = false;
-        pdfBtn.disabled = false;
-        if (btnText) btnText.style.display = 'inline';
-        if (btnLoading) btnLoading.style.display = 'none';
-        btn.style.opacity = '1';
+        btn.innerHTML = btn.innerHTML.replace('<span class="loading"></span> Processing...', 
+            buttonId === 'csvBtn' ? '📥 Download CSV' : '📄 Download PDF');
     }
 }
 
 function formatDateTimeForAPI(dateTimeLocal) {
-    // Convert from datetime-local to format expected by API
-    return dateTimeLocal.replace('T', ' ');
+    // Convert from datetime-local to format expected by API (YYYY-MM-DD HH:MM:SS)
+    return dateTimeLocal.replace('T', ' ') + ':00';
 }
 
-async function previewData() {
+function validateInputs() {
     let fromTime = document.getElementById("fromTime").value;
     let toTime = document.getElementById("toTime").value;
-    let meterType = document.getElementById("meterType").value;
 
     if(!fromTime || !toTime){
         showStatus("❌ Please select From and To time", "error");
-        return;
+        return false;
     }
     
-    setLoading(true, 'previewBtn');
-    showStatus("📡 Fetching data...", "info");
+    // Validate that from time is before to time
+    if (new Date(fromTime) >= new Date(toTime)) {
+        showStatus("❌ From time must be before To time", "error");
+        return false;
+    }
+    
+    return true;
+}
+
+function downloadCSV() {
+    if (!validateInputs()) return;
+    
+    let fromTime = document.getElementById("fromTime").value;
+    let toTime = document.getElementById("toTime").value;
+    let meterType = document.getElementById("meterType").value;
+    
+    setLoading(true, 'csvBtn');
     
     try {
         let fromFormatted = formatDateTimeForAPI(fromTime);
         let toFormatted = formatDateTimeForAPI(toTime);
         
-        // You'll need to create this endpoint or use your existing API
-        // For now, we'll use the fetch_records logic through an API endpoint
-        let url = `/api/fetch_records?type=${meterType}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
+        // Use the server-side CSV download
+        let url = `/download_csv?type=${meterType}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
         
-        let response = await fetch(url);
+        // Trigger download
+        window.location.href = url;
         
-        if (!response.ok) {
-            throw new Error(`HTTP ${response.status}`);
-        }
-        
-        let data = await response.json();
-        
-        if (data && data.length > 0) {
-            showStatus(`✅ Data fetched successfully! Found ${data.length} records.`, "success");
-            
-            // Store data for CSV/PDF download
-            sessionStorage.setItem('lastReportData', JSON.stringify(data));
-            sessionStorage.setItem('lastParams', JSON.stringify({
-                type: meterType,
-                start: fromFormatted,
-                end: toFormatted
-            }));
-            
-            // Display preview
-            displayPreview(data);
-        } else {
-            showStatus("⚠️ No data found for selected time range", "info");
-            document.getElementById('previewSection').style.display = 'none';
-        }
-        
+        showStatus("📥 CSV download started. Please check your downloads folder.", "success");
     } catch (error) {
-        console.error('Fetch error:', error);
-        showStatus(`❌ Error fetching data: ${error.message}`, "error");
+        console.error('CSV download error:', error);
+        showStatus(`❌ Error downloading CSV: ${error.message}`, "error");
     } finally {
-        setLoading(false, 'previewBtn');
+        setTimeout(() => {
+            setLoading(false, 'csvBtn');
+        }, 2000);
     }
-}
-
-function displayPreview(data) {
-    let previewSection = document.getElementById('previewSection');
-    let previewBody = document.getElementById('previewBody');
-    let summaryStats = document.getElementById('summaryStats');
-    let recordCount = document.getElementById('recordCount');
-    
-    if (data.length === 0) {
-        previewBody.innerHTML = '<tr><td colspan="7" style="text-align: center;">No data available</td></tr>';
-    } else {
-        let rows = '';
-        let totalMassFlow = 0;
-        let totalVolumeFlow = 0;
-        let avgDensity = 0;
-        
-        // Show last 20 records
-        let previewData = data.slice(-20);
-        
-        previewData.forEach(record => {
-            let massFlow = parseFloat(record.MassFlow || 0).toFixed(5);
-            let massTotal = parseFloat(record.Masstotal || 0).toFixed(5);
-            let volumeFlow = parseFloat(record.VolumeFlow || 0).toFixed(5);
-            let volumeTotal = parseFloat(record.Volumetotal || 0).toFixed(5);
-            let density = parseFloat(record.Density || 0).toFixed(5);
-            let temp = parseFloat(record.Temp || 0).toFixed(5);
-            
-            totalMassFlow += parseFloat(massFlow);
-            totalVolumeFlow += parseFloat(volumeFlow);
-            avgDensity += parseFloat(density);
-            
-            rows += `<tr>
-                <td>${record.Timestamp || record.TimestampIST || 'N/A'}</td>
-                <td>${massFlow}</td>
-                <td>${massTotal}</td>
-                <td>${volumeFlow}</td>
-                <td>${volumeTotal}</td>
-                <td>${density}</td>
-                <td>${temp}</td>
-            </tr>`;
-        });
-        
-        previewBody.innerHTML = rows;
-        
-        // Calculate averages
-        avgDensity = avgDensity / previewData.length;
-        
-        // Summary statistics
-        summaryStats.innerHTML = `
-            <div class="stat-card">
-                <h5>Total Records</h5>
-                <div class="stat-value">${data.length}</div>
-            </div>
-            <div class="stat-card">
-                <h5>Avg Mass Flow (T/H)</h5>
-                <div class="stat-value">${(totalMassFlow / previewData.length).toFixed(5)}</div>
-            </div>
-            <div class="stat-card">
-                <h5>Avg Volume Flow (L/H)</h5>
-                <div class="stat-value">${(totalVolumeFlow / previewData.length).toFixed(5)}</div>
-            </div>
-            <div class="stat-card">
-                <h5>Avg Density (kg/m³)</h5>
-                <div class="stat-value">${avgDensity.toFixed(5)}</div>
-            </div>
-        `;
-        
-        recordCount.innerHTML = `Showing last 20 of ${data.length} records`;
-    }
-    
-    previewSection.style.display = 'block';
-}
-
-function downloadCSV() {
-    let data = sessionStorage.getItem('lastReportData');
-    let params = sessionStorage.getItem('lastParams');
-    
-    if (!data || !params) {
-        showStatus("⚠️ Please preview data first", "info");
-        return;
-    }
-    
-    params = JSON.parse(params);
-    
-    // Use the server-side CSV download
-    let fromFormatted = params.start;
-    let toFormatted = params.end;
-    
-    window.location.href = `/download_csv?type=${params.type}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
-    showStatus("📥 CSV download started", "success");
 }
 
 function downloadPDF() {
-    let data = sessionStorage.getItem('lastReportData');
-    let params = sessionStorage.getItem('lastParams');
+    if (!validateInputs()) return;
     
-    if (!data || !params) {
-        showStatus("⚠️ Please preview data first", "info");
-        return;
+    let fromTime = document.getElementById("fromTime").value;
+    let toTime = document.getElementById("toTime").value;
+    let meterType = document.getElementById("meterType").value;
+    
+    setLoading(true, 'pdfBtn');
+    
+    try {
+        let fromFormatted = formatDateTimeForAPI(fromTime);
+        let toFormatted = formatDateTimeForAPI(toTime);
+        
+        // Use the server-side PDF download
+        let url = `/download_pdf?type=${meterType}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
+        
+        // Trigger download
+        window.location.href = url;
+        
+        showStatus("📄 PDF download started. Please check your downloads folder.", "success");
+    } catch (error) {
+        console.error('PDF download error:', error);
+        showStatus(`❌ Error downloading PDF: ${error.message}`, "error");
+    } finally {
+        setTimeout(() => {
+            setLoading(false, 'pdfBtn');
+        }, 2000);
     }
-    
-    params = JSON.parse(params);
-    
-    // Use the server-side PDF download
-    let fromFormatted = params.start;
-    let toFormatted = params.end;
-    
-    window.location.href = `/download_pdf?type=${params.type}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
-    showStatus("📄 PDF download started", "success");
 }
 
 function resetFilters() {
     document.getElementById("fromTime").value = '';
     document.getElementById("toTime").value = '';
     document.getElementById("meterType").value = 'FT1';
-    document.getElementById("previewSection").style.display = 'none';
     document.getElementById("statusMessage").style.display = 'none';
-    sessionStorage.removeItem('lastReportData');
-    sessionStorage.removeItem('lastParams');
 }
 
 // Set default dates (last 24 hours)
@@ -544,9 +333,6 @@ function setDefaultDates() {
 
 // Initialize on page load
 setDefaultDates();
-
-// Add this API endpoint to your app.py
-// You'll need to create this endpoint to fetch records for preview
 </script>
 
 </body>
