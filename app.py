@@ -386,7 +386,7 @@ def parse_dt(value):
             return datetime.strptime(value.replace('T', ' '), "%Y-%m-%d %H:%M")
 
 def fetch_records(prefix, start, end):
-    deviceid = "susanad"
+    deviceid = "susanmpa"
     
     print(f"Fetching records for {prefix} from {start} to {end}")  # Debug print
     
@@ -405,7 +405,7 @@ def fetch_records(prefix, start, end):
     query = f"PartitionKey eq '{deviceid}'"
     
     try:
-        entities = list(table_client.query_entities(query))
+        entities = list(table_client_2.query_entities(query))
         print(f"Total entities found: {len(entities)}")  # Debug print
         
         for e in entities:
@@ -622,6 +622,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
