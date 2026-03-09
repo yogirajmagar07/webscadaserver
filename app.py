@@ -262,26 +262,26 @@ def api_readings():
                 "mmsi": "419001409",
                 "imo": "933632",
                 "consumption": {
-                    "mainEnginesTotal": round(total_main_engines, 7),
-                    "generatorsTotal": round(total_generators, 7),
+                    "mainEnginesTotal": round(total_main_engines, 8),
+                    "generatorsTotal": round(total_generators, 8),
                     "mainEngines": [
                         {
                             "name": "Main Engine 1 ",
-                            "value": round(main_engine_1_total, 7)
+                            "value": round(main_engine_1_total, 8)
                         },
                         {
                             "name": "Main Engine 2 ",
-                            "value": round(main_engine_2_total, 7)
+                            "value": round(main_engine_2_total, 8)
                         }
                     ],
                     "generators": [
                         {
                             "name": "Generator 1 ",
-                            "value": round(generator_1_total, 7)
+                            "value": round(generator_1_total, 8)
                         },
                         {
                             "name": "Generator 2 ",
-                            "value": round(generator_2_total, 7)
+                            "value": round(generator_2_total, 8)
                         }
                     ]
                 }
@@ -409,6 +409,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
