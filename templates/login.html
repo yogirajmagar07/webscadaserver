@@ -123,43 +123,53 @@ body {
         <form onsubmit="handleLogin(event)">
             <div class="form-group">
                 <label>Username</label>
-                <input type="text" id="username" required autofocus>
+                <input type="text" id="username" value="admin" required autofocus>
             </div>
             
             <div class="form-group">
                 <label>Password</label>
-                <input type="password" id="password" required>
+                <input type="password" id="password" value="admin123" required>
             </div>
             
             <button type="submit" class="login-btn">Login</button>
         </form>
+        
+        <div class="demo-credentials">
+            <p><strong>Demo Credentials:</strong></p>
+            <p>Username: admin</p>
+            <p>Password: admin123</p>
+        </div>
     </div>
 
     <script>
-    function handleLogin(event) {
+    async function handleLogin(event) {
         event.preventDefault();
         
         let username = document.getElementById('username').value;
         let password = document.getElementById('password').value;
         let errorDiv = document.getElementById('errorMessage');
         
-        // Simple client-side validation (you should also validate on server)
-        if (username === 'admin' && password === 'admin123') {
-            // Store login state
-            sessionStorage.setItem('isLoggedIn', 'true');
-            sessionStorage.setItem('username', username);
+        try {
+            let response = await fetch('/api/login', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ username, password })
+            });
             
-            // Redirect to dashboard
-            window.location.href = '/dashboard';
-        } else {
+            let data = await response.json();
+            
+            if (data.success) {
+                window.location.href = '/dashboard';
+            } else {
+                errorDiv.style.display = 'block';
+                errorDiv.textContent = data.error || 'Invalid credentials';
+            }
+        } catch (error) {
             errorDiv.style.display = 'block';
-            errorDiv.textContent = 'Invalid username or password';
+            errorDiv.textContent = 'Login failed. Please try again.';
         }
-    }
-    
-    // Check if already logged in
-    if (sessionStorage.getItem('isLoggedIn') === 'true') {
-        window.location.href = '/dashboard';
     }
     </script>
 </body>
