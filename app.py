@@ -307,7 +307,7 @@ def parse_dt(value):
 
 def fetch_records(prefix, start, end):
 
-    deviceid = "susanad"
+    deviceid = "susanmpa"
 
     start_dt = parse_dt(start)
     end_dt = parse_dt(end)
@@ -315,7 +315,7 @@ def fetch_records(prefix, start, end):
     records = []
 
     query = f"PartitionKey eq '{deviceid}'"
-    entities = table_client.query_entities(query)
+    entities = table_client_2.query_entities(query)
 
     for e in entities:
 
@@ -439,6 +439,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
