@@ -17,11 +17,12 @@ body{
     color:white;
     padding:15px;
     font-size:20px;
+    overflow: auto;
 }
 
 .container{
     display:grid;
-    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    grid-template-columns: repeat(3, minmax(320px, 1fr)); /* Fixed to 3 columns */
     gap:20px;
     padding:20px;
 }
@@ -66,6 +67,29 @@ body{
     flex-direction:column;
 }
 
+/* Highlight for bunker card */
+.bunker-card {
+    border: 2px solid #ffd700;
+    background: #2c5282;
+}
+
+.bunker-card h3 {
+    color: #ffd700;
+}
+
+/* Responsive for smaller screens */
+@media screen and (max-width: 1100px){
+    .container{
+        grid-template-columns: repeat(2, 1fr); /* 2 columns on medium screens */
+    }
+}
+
+@media screen and (max-width: 700px){
+    .container{
+        grid-template-columns: 1fr; /* 1 column on mobile */
+    }
+}
+
 </style>
 </head>
 
@@ -81,7 +105,7 @@ body{
         <a href="/reports" style="color:white;margin-right:15px;">Reports</a>
 
         <a href="/logout">
-            <button style="background:#e74c3c;color:white;border:none;padding:6px 12px;border-radius:5px;">
+            <button style="background:#e74c3c;color:white;border:none;padding:6px 12px;border-radius:5px;cursor:pointer;">
                 Logout
             </button>
         </a>
@@ -90,12 +114,18 @@ body{
 
 </div>
 
+<!-- Add last update element -->
+<div style="padding: 0 20px;">
+    <div style="background: #fff; padding: 10px; border-radius: 5px; margin-top: 10px;">
+        <strong>Last Updated:</strong> <span id="lastUpdate">--</span>
+    </div>
+</div>
 
 <div class="container" id="dashboard"></div>
 
 <script>
 
-// Panel mapping
+// Panel mapping - SME together and BUNKER at the end
 const panels = [
     {title:"PME INLET", prefix:"FT1"},
     {title:"PME OUTLET", prefix:"FT2"},
@@ -104,7 +134,8 @@ const panels = [
     {title:"PAE INLET", prefix:"FT5"},
     {title:"PAE OUTLET", prefix:"FT6"},
     {title:"SAE INLET", prefix:"FT7"},
-    {title:"SAE OUTLET", prefix:"FT8"}
+    {title:"SAE OUTLET", prefix:"FT8"},
+    {title:"BUNKER FLOW", prefix:"FT9"}  // Bunker flow at the end
 ];
 
 // Row structure
@@ -129,6 +160,11 @@ function buildDashboard(){
 
         let card = document.createElement("div");
         card.className = "card";
+        
+        // Add special class for bunker card
+        if (panel.prefix === "FT9") {
+            card.classList.add("bunker-card");
+        }
 
         card.innerHTML += `<h3>${panel.title}</h3>`;
 
@@ -165,12 +201,20 @@ function buildRow(prefix, fields){
 
 buildDashboard();
 
+// Function to round to 5 decimal places
+function roundTo5Decimals(value) {
+    if (value === null || value === undefined || value === '') return '0';
+    const num = parseFloat(value);
+    if (isNaN(num)) return '0';
+    return num.toFixed(5);
+}
 
-// Load data
+// Load data from cache
 async function loadData(){
 
     try{
-        let res = await fetch("/api/latest");
+        // Add cache-busting query parameter
+        let res = await fetch("/api/latest?t=" + new Date().getTime());
         let data = await res.json();
 
         if(data.length === 0) return;
@@ -185,22 +229,34 @@ async function loadData(){
                 let el = document.getElementById(tag);
 
                 if(el){
-                    el.innerText = latest[tag] ?? 0;
+                    // Round the value to 5 decimal places
+                    let value = latest[tag] ?? 0;
+                    el.innerText = roundTo5Decimals(value);
                 }
 
             });
         });
 
-        document.getElementById("lastUpdate").innerText =
-            latest.TimestampIST || "--";
+        // Update last update time
+        let lastUpdateEl = document.getElementById("lastUpdate");
+        if (lastUpdateEl) {
+            lastUpdateEl.innerText = latest.TimestampIST || new Date().toLocaleString();
+        }
 
     }catch(e){
-        console.log(e);
+        console.log("Error loading data:", e);
+        
+        // Update last update time with error indication
+        let lastUpdateEl = document.getElementById("lastUpdate");
+        if (lastUpdateEl) {
+            lastUpdateEl.innerText = "Error loading data - " + new Date().toLocaleString();
+        }
     }
 }
 
-setInterval(loadData, 5000);
+// Load data immediately and then every 5 seconds
 loadData();
+setInterval(loadData, 5000);
 
 </script>
 
