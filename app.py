@@ -1,13 +1,14 @@
 import os
 from datetime import datetime, timedelta
 import pytz
-from flask import Flask, request, jsonify, send_file, render_template, session, redirect, Response
+from flask import Flask, request, jsonify, send_file, render_template, session, redirect, Response ,url_for
 from azure.data.tables import TableServiceClient
 import pandas as pd
 from io import BytesIO
 from reportlab.platypus import SimpleDocTemplate, Table
 from reportlab.lib.pagesizes import letter
 import json
+from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = "super-secret-key"
@@ -35,26 +36,34 @@ except:
 # =========================
 latest_cache = {}
 
-# =========================
-# LOGIN CHECK DECORATOR
-# =========================
-def login_required(func):
-    def wrapper(*args, **kwargs):
-        if not session.get("logged_in"):
-            return redirect("/login")
-        return func(*args, **kwargs)
-    wrapper.__name__ = func.__name__
-    return wrapper
+# Login decorator
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if 'user_id' not in session:
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
-
-# =========================
-# LOGIN PAGE (Dummy)
-# =========================
-@app.route("/login")
+# Login route
+@app.route('/')
 def login():
-    session["logged_in"] = True
-    return redirect("/")
+    return render_template('login.html')
 
+# Login API endpoint (for AJAX login)
+@app.route('/api/login', methods=['POST'])
+def api_login():
+    data = request.get_json()
+    username = data.get('username')
+    password = data.get('password')
+    
+    # Simple authentication (use proper auth in production)
+    if username == 'admin' and password == 'admin123':
+        session['user_id'] = username
+        session['username'] = username
+        return jsonify({'success': True})
+    else:
+        return jsonify({'success': False, 'error': 'Invalid credentials'}), 401
 
 # =========================
 # LOGOUT
@@ -62,13 +71,14 @@ def login():
 @app.route("/logout")
 def logout():
     session.clear()
-    return redirect("/login")
+    return redirect("/")
 
 
 # =========================
 # DASHBOARD PAGE
 # =========================
-@app.route("/")
+# Dashboard route (protected)
+@app.route('/dashboard')
 @login_required
 def dashboard():
     return render_template("index.html")
@@ -718,6 +728,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
