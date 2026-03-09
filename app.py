@@ -298,45 +298,45 @@ def api_readings():
 # =========================
 # Fetch Records For Reports
 # =========================
-def parse_dt(value):
-    try:
-        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
-    except ValueError:
-        return datetime.strptime(value, "%Y-%m-%d %H:%M")
+# def parse_dt(value):
+#     try:
+#         return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+#     except ValueError:
+#         return datetime.strptime(value, "%Y-%m-%d %H:%M")
 
 
-def fetch_records(prefix, start, end):
+# def fetch_records(prefix, start, end):
 
-    deviceid = "susanmpa"
+#     deviceid = "susanmpa"
 
-    start_dt = parse_dt(start)
-    end_dt = parse_dt(end)
+#     start_dt = parse_dt(start)
+#     end_dt = parse_dt(end)
 
-    records = []
+#     records = []
 
-    query = f"PartitionKey eq '{deviceid}'"
-    entities = table_client.query_entities(query)
+#     query = f"PartitionKey eq '{deviceid}'"
+#     entities = table_client.query_entities(query)
 
-    for e in entities:
+#     for e in entities:
 
-        ts = e.get("TimestampIST")
-        if not ts:
-            continue
+#         ts = e.get("TimestampIST")
+#         if not ts:
+#             continue
 
-        ts_dt = parse_dt(ts)
+#         ts_dt = parse_dt(ts)
 
-        if start_dt <= ts_dt <= end_dt:
-            records.append({
-                "Timestamp": ts,
-                "MassFlow": e.get(prefix + "MassFlow"),
-                "Masstotal": e.get(prefix + "Masstotal"),
-                "VolumeFlow": e.get(prefix + "VolumeFlow"),
-                "Volumetotal": e.get(prefix + "Volumetotal"),
-                "Density": e.get(prefix + "Density"),
-                "Temp": e.get(prefix + "Temp")
-            })
+#         if start_dt <= ts_dt <= end_dt:
+#             records.append({
+#                 "Timestamp": ts,
+#                 "MassFlow": e.get(prefix + "MassFlow"),
+#                 "Masstotal": e.get(prefix + "Masstotal"),
+#                 "VolumeFlow": e.get(prefix + "VolumeFlow"),
+#                 "Volumetotal": e.get(prefix + "Volumetotal"),
+#                 "Density": e.get(prefix + "Density"),
+#                 "Temp": e.get(prefix + "Temp")
+#             })
 
-    return records
+#     return records
 
 
 # =========================
@@ -370,6 +370,74 @@ def fetch_records(prefix, start, end):
 #     except Exception as e:
 #         print(f"API fetch records error: {e}")
 #         return jsonify({"error": str(e)}), 500
+
+
+
+def parse_dt(value):
+    try:
+        # Try parsing with seconds
+        return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+    except ValueError:
+        try:
+            # Try parsing without seconds
+            return datetime.strptime(value, "%Y-%m-%d %H:%M")
+        except ValueError:
+            # Try parsing with T
+            return datetime.strptime(value.replace('T', ' '), "%Y-%m-%d %H:%M")
+
+def fetch_records(prefix, start, end):
+    deviceid = "susanad"
+    
+    print(f"Fetching records for {prefix} from {start} to {end}")  # Debug print
+    
+    try:
+        start_dt = parse_dt(start)
+        end_dt = parse_dt(end)
+        
+        print(f"Parsed dates: start={start_dt}, end={end_dt}")  # Debug print
+    except Exception as e:
+        print(f"Date parsing error: {e}")
+        return []
+
+    records = []
+    
+    # Optimize query with time filter
+    query = f"PartitionKey eq '{deviceid}'"
+    
+    try:
+        entities = list(table_client.query_entities(query))
+        print(f"Total entities found: {len(entities)}")  # Debug print
+        
+        for e in entities:
+            ts = e.get("TimestampIST")
+            if not ts:
+                continue
+            
+            try:
+                ts_dt = parse_dt(ts)
+                
+                if start_dt <= ts_dt <= end_dt:
+                    record = {
+                        "Timestamp": ts,
+                        "MassFlow": e.get(prefix + "MassFlow", 0),
+                        "Masstotal": e.get(prefix + "Masstotal", 0),
+                        "VolumeFlow": e.get(prefix + "VolumeFlow", 0),
+                        "Volumetotal": e.get(prefix + "Volumetotal", 0),
+                        "Density": e.get(prefix + "Density", 0),
+                        "Temp": e.get(prefix + "Temp", 0)
+                    }
+                    records.append(record)
+            except Exception as e:
+                print(f"Error processing record: {e}")
+                continue
+        
+        print(f"Records found for {prefix}: {len(records)}")  # Debug print
+        
+    except Exception as e:
+        print(f"Query error: {e}")
+        return []
+    
+    return records
 # =========================
 # CSV DOWNLOAD
 # =========================
@@ -433,38 +501,62 @@ def download_csv():
 #     )
 
 @app.route("/download_pdf")
+@login_required
 def download_pdf():
     try:
         prefix = request.args.get("type")
         start = request.args.get("start").replace("T", " ")
         end = request.args.get("end").replace("T", " ")
         
+        print(f"PDF Request - Prefix: {prefix}, Start: {start}, End: {end}")  # Debug
+        
         # Fetch data
         data = fetch_records(prefix, start, end)
+        
+        print(f"Data retrieved: {len(data)} records")  # Debug
         
         buffer = BytesIO()
         
         if not data or len(data) == 0:
-            # Simple PDF with no data message
+            # Create PDF with no data message
             from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            
             c = canvas.Canvas(buffer, pagesize=letter)
-            c.drawString(100, 750, f"No data found for {prefix}")
-            c.drawString(100, 735, f"From: {start}")
-            c.drawString(100, 720, f"To: {end}")
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(100, 750, f"No Data Found for {prefix}")
+            
+            c.setFont("Helvetica", 12)
+            c.drawString(100, 700, f"From: {start}")
+            c.drawString(100, 680, f"To: {end}")
+            c.drawString(100, 660, f"Device: susanad")
+            c.drawString(100, 640, f"Time Range: {(parse_dt(end) - parse_dt(start)).total_seconds()/3600:.1f} hours")
+            
+            c.setFont("Helvetica", 10)
+            c.drawString(100, 600, "Possible issues:")
+            c.drawString(120, 580, "1. No data exists for this time range")
+            c.drawString(120, 560, "2. The meter prefix might be incorrect")
+            c.drawString(120, 540, "3. Check if the device ID 'susanad' has data")
+            
             c.save()
         else:
-            # Use the improved version above or keep simple
+            # Create PDF with data
+            from reportlab.lib.pagesizes import landscape, letter
             from reportlab.pdfgen import canvas
+            
             c = canvas.Canvas(buffer, pagesize=landscape(letter))
             
-            # Write header
-            c.setFont("Helvetica-Bold", 12)
+            # Header
+            c.setFont("Helvetica-Bold", 14)
             c.drawString(50, 550, f"{prefix} Flow Meter Report")
-            c.setFont("Helvetica", 10)
-            c.drawString(50, 535, f"From: {start}  To: {end}")
             
-            # Write first 20 records
-            y = 500
+            c.setFont("Helvetica", 10)
+            c.drawString(50, 530, f"From: {start}")
+            c.drawString(350, 530, f"To: {end}")
+            c.drawString(50, 515, f"Total Records: {len(data)}")
+            
+            # Table headers
+            y = 480
             c.setFont("Helvetica-Bold", 8)
             c.drawString(50, y, "Timestamp")
             c.drawString(200, y, "Mass Flow")
@@ -477,23 +569,33 @@ def download_pdf():
             y -= 15
             c.setFont("Helvetica", 7)
             
-            for i, row in enumerate(data[:20]):
-                if y < 50:  # New page if needed
+            # Show first 30 records
+            for i, row in enumerate(data[:30]):
+                if y < 50:  # New page
                     c.showPage()
                     y = 550
                     c.setFont("Helvetica-Bold", 8)
-                    c.drawString(50, y, "Timestamp (cont.)")
+                    c.drawString(50, y, "Timestamp (continued)")
                     y -= 15
                     c.setFont("Helvetica", 7)
                 
-                c.drawString(50, y, str(row.get("Timestamp", ""))[:16])
-                c.drawString(200, y, f"{float(row.get('MassFlow',0)):.5f}")
-                c.drawString(270, y, f"{float(row.get('Masstotal',0)):.5f}")
-                c.drawString(340, y, f"{float(row.get('VolumeFlow',0)):.5f}")
-                c.drawString(410, y, f"{float(row.get('Volumetotal',0)):.5f}")
-                c.drawString(480, y, f"{float(row.get('Density',0)):.5f}")
-                c.drawString(550, y, f"{float(row.get('Temp',0)):.5f}")
+                try:
+                    c.drawString(50, y, str(row.get("Timestamp", ""))[:16])
+                    c.drawString(200, y, f"{float(row.get('MassFlow', 0) or 0):.5f}")
+                    c.drawString(270, y, f"{float(row.get('Masstotal', 0) or 0):.5f}")
+                    c.drawString(340, y, f"{float(row.get('VolumeFlow', 0) or 0):.5f}")
+                    c.drawString(410, y, f"{float(row.get('Volumetotal', 0) or 0):.5f}")
+                    c.drawString(480, y, f"{float(row.get('Density', 0) or 0):.5f}")
+                    c.drawString(550, y, f"{float(row.get('Temp', 0) or 0):.5f}")
+                except Exception as e:
+                    print(f"Error writing row {i}: {e}")
+                
                 y -= 12
+            
+            # Add summary
+            if len(data) > 30:
+                c.setFont("Helvetica-Oblique", 8)
+                c.drawString(50, y-10, f"... and {len(data) - 30} more records")
             
             c.save()
         
@@ -510,8 +612,9 @@ def download_pdf():
         
     except Exception as e:
         print(f"PDF download error: {e}")
+        import traceback
+        traceback.print_exc()
         return jsonify({"error": str(e)}), 500
-
 
 # =========================
 # RUN APP
@@ -519,6 +622,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
