@@ -339,7 +339,37 @@ def fetch_records(prefix, start, end):
     return records
 
 
-
+=========================
+# Fetch Records API for Preview
+# =========================
+@app.route("/api/fetch_records")
+@login_required
+def api_fetch_records():
+    try:
+        prefix = request.args.get("type")
+        start = request.args.get("start")
+        end = request.args.get("end")
+        
+        if not prefix or not start or not end:
+            return jsonify({"error": "Missing parameters"}), 400
+        
+        # Use your existing fetch_records function
+        data = fetch_records(prefix, start, end)
+        
+        # Round values to 5 decimal places
+        for record in data:
+            for key in ['MassFlow', 'Masstotal', 'VolumeFlow', 'Volumetotal', 'Density', 'Temp']:
+                if key in record and record[key] is not None:
+                    try:
+                        record[key] = round(float(record[key]), 5)
+                    except (ValueError, TypeError):
+                        pass
+        
+        return jsonify(data)
+        
+    except Exception as e:
+        print(f"API fetch records error: {e}")
+        return jsonify({"error": str(e)}), 500
 # =========================
 # CSV DOWNLOAD
 # =========================
@@ -409,6 +439,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
