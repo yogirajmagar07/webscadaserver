@@ -240,16 +240,16 @@ def api_readings():
 
             # Calculate engine and generator totals
             # Main Engine 1: FT1 (Inlet) + FT2 (Outlet)
-            main_engine_1_total = total_ft1 + total_ft2
+            main_engine_1_total = total_ft1 - total_ft2
             
             # Main Engine 2: FT3 (Inlet) + FT4 (Outlet)
-            main_engine_2_total = total_ft3 + total_ft4
+            main_engine_2_total = total_ft3 - total_ft4
             
             # Generator 1: FT5 (Inlet) + FT6 (Outlet)
-            generator_1_total = total_ft5 + total_ft6
+            generator_1_total = total_ft5 - total_ft6
             
             # Generator 2: FT7 (Inlet) + FT8 (Outlet)
-            generator_2_total = total_ft7 + total_ft8
+            generator_2_total = total_ft7 - total_ft8
             
             # Total all engines and generators
             total_main_engines = main_engine_1_total + main_engine_2_total
@@ -409,6 +409,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
