@@ -400,37 +400,117 @@ def download_csv():
 # =========================
 # PDF DOWNLOAD
 # =========================
+# @app.route("/download_pdf")
+# @login_required
+# def download_pdf():
+
+#     prefix = request.args.get("type")
+#     start = request.args.get("start").replace("T", " ")
+#     end = request.args.get("end").replace("T", " ")
+
+#     data = fetch_records(prefix, start, end)
+
+#     buffer = BytesIO()
+#     pdf = SimpleDocTemplate(buffer, pagesize=letter)
+
+#     if not data:
+#         table_data = [["No Data Found"]]
+#     else:
+#         table_data = [list(data[0].keys())]
+#         for row in data:
+#             table_data.append(list(row.values()))
+
+#     table = Table(table_data)
+#     pdf.build([table])
+
+#     buffer.seek(0)
+
+#     return send_file(
+#         buffer,
+#         mimetype="application/pdf",
+#         download_name="report.pdf",
+#         as_attachment=True
+#     )
+
 @app.route("/download_pdf")
-@login_required
 def download_pdf():
-
-    prefix = request.args.get("type")
-    start = request.args.get("start").replace("T", " ")
-    end = request.args.get("end").replace("T", " ")
-
-    data = fetch_records(prefix, start, end)
-
-    buffer = BytesIO()
-    pdf = SimpleDocTemplate(buffer, pagesize=letter)
-
-    if not data:
-        table_data = [["No Data Found"]]
-    else:
-        table_data = [list(data[0].keys())]
-        for row in data:
-            table_data.append(list(row.values()))
-
-    table = Table(table_data)
-    pdf.build([table])
-
-    buffer.seek(0)
-
-    return send_file(
-        buffer,
-        mimetype="application/pdf",
-        download_name="report.pdf",
-        as_attachment=True
-    )
+    try:
+        prefix = request.args.get("type")
+        start = request.args.get("start").replace("T", " ")
+        end = request.args.get("end").replace("T", " ")
+        
+        # Fetch data
+        data = fetch_records(prefix, start, end)
+        
+        buffer = BytesIO()
+        
+        if not data or len(data) == 0:
+            # Simple PDF with no data message
+            from reportlab.pdfgen import canvas
+            c = canvas.Canvas(buffer, pagesize=letter)
+            c.drawString(100, 750, f"No data found for {prefix}")
+            c.drawString(100, 735, f"From: {start}")
+            c.drawString(100, 720, f"To: {end}")
+            c.save()
+        else:
+            # Use the improved version above or keep simple
+            from reportlab.pdfgen import canvas
+            c = canvas.Canvas(buffer, pagesize=landscape(letter))
+            
+            # Write header
+            c.setFont("Helvetica-Bold", 12)
+            c.drawString(50, 550, f"{prefix} Flow Meter Report")
+            c.setFont("Helvetica", 10)
+            c.drawString(50, 535, f"From: {start}  To: {end}")
+            
+            # Write first 20 records
+            y = 500
+            c.setFont("Helvetica-Bold", 8)
+            c.drawString(50, y, "Timestamp")
+            c.drawString(200, y, "Mass Flow")
+            c.drawString(270, y, "Mass Total")
+            c.drawString(340, y, "Volume Flow")
+            c.drawString(410, y, "Volume Total")
+            c.drawString(480, y, "Density")
+            c.drawString(550, y, "Temp")
+            
+            y -= 15
+            c.setFont("Helvetica", 7)
+            
+            for i, row in enumerate(data[:20]):
+                if y < 50:  # New page if needed
+                    c.showPage()
+                    y = 550
+                    c.setFont("Helvetica-Bold", 8)
+                    c.drawString(50, y, "Timestamp (cont.)")
+                    y -= 15
+                    c.setFont("Helvetica", 7)
+                
+                c.drawString(50, y, str(row.get("Timestamp", ""))[:16])
+                c.drawString(200, y, f"{float(row.get('MassFlow',0)):.5f}")
+                c.drawString(270, y, f"{float(row.get('Masstotal',0)):.5f}")
+                c.drawString(340, y, f"{float(row.get('VolumeFlow',0)):.5f}")
+                c.drawString(410, y, f"{float(row.get('Volumetotal',0)):.5f}")
+                c.drawString(480, y, f"{float(row.get('Density',0)):.5f}")
+                c.drawString(550, y, f"{float(row.get('Temp',0)):.5f}")
+                y -= 12
+            
+            c.save()
+        
+        buffer.seek(0)
+        
+        filename = f"{prefix}_report_{start.replace(' ', '_')}_to_{end.replace(' ', '_')}.pdf"
+        
+        return send_file(
+            buffer,
+            mimetype="application/pdf",
+            download_name=filename,
+            as_attachment=True
+        )
+        
+    except Exception as e:
+        print(f"PDF download error: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 # =========================
@@ -439,6 +519,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
