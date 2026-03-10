@@ -565,6 +565,7 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
     # Query all entities
     query = f"PartitionKey eq '{deviceid}'"
     entities = list(table_client_2.query_entities(query))
+    print(f"Total entities found: {len(entities)}")
     
     # Filter entities by time range
     filtered_entities = []
@@ -578,6 +579,8 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
                 filtered_entities.append(e)
         except:
             continue
+    
+    print(f"Filtered entities: {len(filtered_entities)}")
     
     if not filtered_entities:
         return {
@@ -601,6 +604,10 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
         ts = e.get("TimestampIST")
         ts_dt = parse_dt(ts)
         
+        # Debug: Print first record to see available fields
+        if len(records) == 0:
+            print(f"Sample record keys: {list(e.keys())}")
+        
         if engine_type == 'consumpution':
             # Total Consumption - FT9 only
             current_value = float(e.get("FT9Volumetotal", 0) or 0)
@@ -611,15 +618,28 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
             record_data = {
                 "FT9_VolumeTotal": current_value
             }
+            
+            # Get other FT9 fields
+            ft9_massflow = float(e.get("FT9MassFlow", 0) or 0)
+            ft9_temp = float(e.get("FT9Temp", 0) or 0)
+            ft9_density = float(e.get("FT9Density", 0) or 0)
         else:
             # Engine consumption (Inlet - Outlet)
-            inlet_value = float(e.get(config['inlet'] + "Volumetotal", 0) or 0)
-            outlet_value = float(e.get(config['outlet'] + "Volumetotal", 0) or 0)
-            consumption = inlet_value - outlet_value
+            inlet_vol = float(e.get(config['inlet'] + "Volumetotal", 0) or 0)
+            outlet_vol = float(e.get(config['outlet'] + "Volumetotal", 0) or 0)
+            consumption = inlet_vol - outlet_vol
+            
+            # Get other fields
+            inlet_massflow = float(e.get(config['inlet'] + "MassFlow", 0) or 0)
+            outlet_massflow = float(e.get(config['outlet'] + "MassFlow", 0) or 0)
+            inlet_temp = float(e.get(config['inlet'] + "Temp", 0) or 0)
+            outlet_temp = float(e.get(config['outlet'] + "Temp", 0) or 0)
+            inlet_density = float(e.get(config['inlet'] + "Density", 0) or 0)
+            outlet_density = float(e.get(config['outlet'] + "Density", 0) or 0)
             
             record_data = {
-                f"{config['inlet']}_VolumeTotal": inlet_value,
-                f"{config['outlet']}_VolumeTotal": outlet_value
+                f"{config['inlet']}_VolumeTotal": inlet_vol,
+                f"{config['outlet']}_VolumeTotal": outlet_vol
             }
         
         # Determine interval key
@@ -641,8 +661,6 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
             "Interval": interval_key,
             "EngineType": engine_type,
             "EngineName": config['name'],
-            "InletValue": round(inlet_value, 5),
-            "OutletValue": round(outlet_value, 5),
             "Consumption": round(consumption, 5),
             **record_data
         }
@@ -650,18 +668,22 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
         # Add additional fields based on engine type
         if engine_type != 'consumpution':
             record.update({
-                f"{config['inlet']}_MassFlow": round(float(e.get(config['inlet'] + "MassFlow", 0) or 0), 5),
-                f"{config['outlet']}_MassFlow": round(float(e.get(config['outlet'] + "MassFlow", 0) or 0), 5),
-                f"{config['inlet']}_Temp": round(float(e.get(config['inlet'] + "Temp", 0) or 0), 2),
-                f"{config['outlet']}_Temp": round(float(e.get(config['outlet'] + "Temp", 0) or 0), 2),
-                f"{config['inlet']}_Density": round(float(e.get(config['inlet'] + "Density", 0) or 0), 2),
-                f"{config['outlet']}_Density": round(float(e.get(config['outlet'] + "Density", 0) or 0), 2)
+                f"{config['inlet']}_MassFlow": round(inlet_massflow, 5),
+                f"{config['outlet']}_MassFlow": round(outlet_massflow, 5),
+                f"{config['inlet']}_Temp": round(inlet_temp, 2),
+                f"{config['outlet']}_Temp": round(outlet_temp, 2),
+                f"{config['inlet']}_Density": round(inlet_density, 2),
+                f"{config['outlet']}_Density": round(outlet_density, 2),
+                "InletValue": round(inlet_vol, 5),
+                "OutletValue": round(outlet_vol, 5)
             })
         else:
             record.update({
-                "FT9_MassFlow": round(float(e.get("FT9MassFlow", 0) or 0), 5),
-                "FT9_Temp": round(float(e.get("FT9Temp", 0) or 0), 2),
-                "FT9_Density": round(float(e.get("FT9Density", 0) or 0), 2)
+                "FT9_MassFlow": round(ft9_massflow, 5),
+                "FT9_Temp": round(ft9_temp, 2),
+                "FT9_Density": round(ft9_density, 2),
+                "InletValue": round(current_value, 5),
+                "OutletValue": 0
             })
         
         if interval != 'raw':
@@ -672,30 +694,70 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
                     'total_inlet': 0,
                     'total_outlet': 0,
                     'total_consumption': 0,
+                    'total_inlet_mass': 0,
+                    'total_outlet_mass': 0,
+                    'total_inlet_temp': 0,
+                    'total_outlet_temp': 0,
+                    'total_inlet_density': 0,
+                    'total_outlet_density': 0,
                     'first_timestamp': ts
                 }
             
             agg = consumption_by_interval[interval_key]
             agg['count'] += 1
-            agg['total_inlet'] += inlet_value
-            agg['total_outlet'] += outlet_value
+            agg['total_inlet'] += (inlet_vol if engine_type != 'consumpution' else current_value)
+            agg['total_outlet'] += (outlet_vol if engine_type != 'consumpution' else 0)
             agg['total_consumption'] += consumption
+            
+            if engine_type != 'consumpution':
+                agg['total_inlet_mass'] += inlet_massflow
+                agg['total_outlet_mass'] += outlet_massflow
+                agg['total_inlet_temp'] += inlet_temp
+                agg['total_outlet_temp'] += outlet_temp
+                agg['total_inlet_density'] += inlet_density
+                agg['total_outlet_density'] += outlet_density
+            else:
+                agg['total_inlet_mass'] += ft9_massflow
+                agg['total_inlet_temp'] += ft9_temp
+                agg['total_inlet_density'] += ft9_density
         else:
             records.append(record)
     
     # Create aggregated records for intervals
     if interval != 'raw':
         for interval_key, agg in consumption_by_interval.items():
-            records.append({
+            count = agg['count']
+            agg_record = {
                 "Timestamp": agg['first_timestamp'],
                 "Interval": interval_key,
                 "EngineType": engine_type,
                 "EngineName": config['name'],
-                "InletValue": round(agg['total_inlet'], 5),
-                "OutletValue": round(agg['total_outlet'], 5),
                 "Consumption": round(agg['total_consumption'], 5),
-                "RecordCount": agg['count']
-            })
+                "RecordCount": count,
+                "InletValue": round(agg['total_inlet'], 5),
+                "OutletValue": round(agg['total_outlet'], 5)
+            }
+            
+            if engine_type != 'consumpution':
+                agg_record.update({
+                    f"{config['inlet']}_VolumeTotal": round(agg['total_inlet'], 5),
+                    f"{config['outlet']}_VolumeTotal": round(agg['total_outlet'], 5),
+                    f"{config['inlet']}_MassFlow": round(agg['total_inlet_mass'] / count, 5),
+                    f"{config['outlet']}_MassFlow": round(agg['total_outlet_mass'] / count, 5),
+                    f"{config['inlet']}_Temp": round(agg['total_inlet_temp'] / count, 2),
+                    f"{config['outlet']}_Temp": round(agg['total_outlet_temp'] / count, 2),
+                    f"{config['inlet']}_Density": round(agg['total_inlet_density'] / count, 2),
+                    f"{config['outlet']}_Density": round(agg['total_outlet_density'] / count, 2)
+                })
+            else:
+                agg_record.update({
+                    "FT9_VolumeTotal": round(agg['total_inlet'], 5),
+                    "FT9_MassFlow": round(agg['total_inlet_mass'] / count, 5),
+                    "FT9_Temp": round(agg['total_inlet_temp'] / count, 2),
+                    "FT9_Density": round(agg['total_inlet_density'] / count, 2)
+                })
+            
+            records.append(agg_record)
         
         # Sort by timestamp
         records.sort(key=lambda x: x['Timestamp'])
@@ -713,7 +775,6 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
         'record_count': len(records),
         'interval': interval
     }
-
 
 @app.route("/download_csv")
 @login_required
@@ -1007,6 +1068,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
