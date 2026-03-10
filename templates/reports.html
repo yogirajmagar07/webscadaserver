@@ -1,4 +1,4 @@
-<!-- <!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -174,19 +174,26 @@ button:hover {
             <label>📅 To Time</label>
             <input type="datetime-local" id="toTime" step="1" required>
         </div>
+        
+        <div class="filter-item">
+            <label>⚙️ Select Engine/Generator</label>
+            <select id="engineGroup" onchange="updateGroupInfo()">
+                <option value="PME">PME - Main Engine (P) </option>
+                <option value="SME">SME - Main Engine (S) </option>
+                <option value="PAE">PAE - Auxiliary Engine (P) </option>
+                <option value="SAE">SAE - Auxiliary Engine (S) </option>
+                <option value="consumpution">TOTAL - Total Consumption </option>
+            </select>
+        </div>
 
         <div class="filter-item">
-            <label>⚙️ Select Meter</label>
-            <select id="meterType">
-                <option value="FT1">PME INLET - Main Engine 1 Inlet</option>
-                <option value="FT2">PME OUTLET - Main Engine 1 Outlet</option>
-                <option value="FT3">SME INLET - Main Engine 2 Inlet</option>
-                <option value="FT4">SME OUTLET - Main Engine 2 Outlet</option>
-                <option value="FT5">PAE INLET - Generator 1 Inlet</option>
-                <option value="FT6">PAE OUTLET - Generator 1 Outlet</option>
-                <option value="FT7">SAE INLET - Generator 2 Inlet</option>
-                <option value="FT8">SAE OUTLET - Generator 2 Outlet</option>
-                <option value="FT9">BUNKER FLOW</option>
+            <label>⏱️ Interval</label>
+            <select id="interval" onchange="updateIntervalInfo()">
+                <option value="minute">Minute Wise </option>
+                <option value="hour" selected>Hour Wise </option>
+                <option value="daily">Daily Wise </option>
+                <option value="monthly">Monthly Wise </option>
+                <option value="yearly">Yearly Wise </option>
             </select>
         </div>
     </div>
@@ -336,9 +343,9 @@ setDefaultDates();
 </script>
 
 </body>
-</html> -->
+</html>
 
-<!DOCTYPE html>
+<!-- <!DOCTYPE html>
 <html>
 <head>
 <meta charset="UTF-8">
@@ -813,4 +820,4 @@ updateGroupInfo();
 updateIntervalInfo();
 </script>
 </body>
-</html>
+</html> -->
