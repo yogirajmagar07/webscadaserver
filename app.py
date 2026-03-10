@@ -630,8 +630,8 @@ def fetch_engine_consumption(engine_type, start, end, interval='hour'):
             consumption = inlet_vol - outlet_vol
             
             # Get other fields
-            inlet_massflow = float(e.get(config['inlet'] + "MassFlow", 0) or 0)
-            outlet_massflow = float(e.get(config['outlet'] + "MassFlow", 0) or 0)
+            inlet_massflow = float(e.get(config['inlet'] + "Masstotal", 0) or 0)
+            outlet_massflow = float(e.get(config['outlet'] + "Masstotal", 0) or 0)
             inlet_temp = float(e.get(config['inlet'] + "Temp", 0) or 0)
             outlet_temp = float(e.get(config['outlet'] + "Temp", 0) or 0)
             inlet_density = float(e.get(config['inlet'] + "Density", 0) or 0)
@@ -1068,6 +1068,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
