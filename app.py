@@ -383,6 +383,97 @@ def api_readings():
 
 
 
+# def parse_dt(value):
+#     try:
+#         # Try parsing with seconds
+#         return datetime.strptime(value, "%Y-%m-%d %H:%M:%S")
+#     except ValueError:
+#         try:
+#             # Try parsing without seconds
+#             return datetime.strptime(value, "%Y-%m-%d %H:%M")
+#         except ValueError:
+#             # Try parsing with T
+#             return datetime.strptime(value.replace('T', ' '), "%Y-%m-%d %H:%M")
+
+# def fetch_records(prefix, start, end):
+#     deviceid = "susanmpa"
+    
+#     print(f"Fetching records for {prefix} from {start} to {end}")  # Debug print
+    
+#     try:
+#         start_dt = parse_dt(start)
+#         end_dt = parse_dt(end)
+        
+#         print(f"Parsed dates: start={start_dt}, end={end_dt}")  # Debug print
+#     except Exception as e:
+#         print(f"Date parsing error: {e}")
+#         return []
+
+#     records = []
+    
+#     # Optimize query with time filter
+#     query = f"PartitionKey eq '{deviceid}'"
+    
+#     try:
+#         entities = list(table_client_2.query_entities(query))
+#         print(f"Total entities found: {len(entities)}")  # Debug print
+        
+#         for e in entities:
+#             ts = e.get("TimestampIST")
+#             if not ts:
+#                 continue
+            
+#             try:
+#                 ts_dt = parse_dt(ts)
+                
+#                 if start_dt <= ts_dt <= end_dt:
+#                     record = {
+#                         "Timestamp": ts,
+#                         "MassFlow": e.get(prefix + "MassFlow", 0),
+#                         "Masstotal": e.get(prefix + "Masstotal", 0),
+#                         "VolumeFlow": e.get(prefix + "VolumeFlow", 0),
+#                         "Volumetotal": e.get(prefix + "Volumetotal", 0),
+#                         "Density": e.get(prefix + "Density", 0),
+#                         "Temp": e.get(prefix + "Temp", 0)
+#                     }
+#                     records.append(record)
+#             except Exception as e:
+#                 print(f"Error processing record: {e}")
+#                 continue
+        
+#         print(f"Records found for {prefix}: {len(records)}")  # Debug print
+        
+#     except Exception as e:
+#         print(f"Query error: {e}")
+#         return []
+    
+#     return records
+# # =========================
+# # CSV DOWNLOAD
+# # =========================
+# @app.route("/download_csv")
+# @login_required
+# def download_csv():
+
+#     prefix = request.args.get("type")
+#     start = request.args.get("start").replace("T", " ")
+#     end = request.args.get("end").replace("T", " ")
+
+#     data = fetch_records(prefix, start, end)
+
+#     df = pd.DataFrame(data)
+
+#     output = BytesIO()
+#     df.to_csv(output, index=False)
+#     output.seek(0)
+
+#     return send_file(
+#         output,
+#         mimetype="text/csv",
+#         download_name="report.csv",
+#         as_attachment=True
+#     )
+
 def parse_dt(value):
     try:
         # Try parsing with seconds
@@ -448,13 +539,493 @@ def fetch_records(prefix, start, end):
         return []
     
     return records
+
 # =========================
-# CSV DOWNLOAD
+# NEW: Group Report Functions
+# =========================
+
+def fetch_group_data(group, start, end, interval='raw'):
+    """Fetch and calculate engine consumption data for a group with interval aggregation"""
+    
+    # Define meter pairs for each group
+    group_config = {
+        'PME': {
+            'name': 'Main Engine 1 (PME)',
+            'inlet': 'FT1',
+            'outlet': 'FT2',
+            'inlet_label': 'PME INLET',
+            'outlet_label': 'PME OUTLET'
+        },
+        'SME': {
+            'name': 'Main Engine 2 (SME)',
+            'inlet': 'FT3',
+            'outlet': 'FT4',
+            'inlet_label': 'SME INLET',
+            'outlet_label': 'SME OUTLET'
+        },
+        'PAE': {
+            'name': 'Generator 1 (PAE)',
+            'inlet': 'FT5',
+            'outlet': 'FT6',
+            'inlet_label': 'PAE INLET',
+            'outlet_label': 'PAE OUTLET'
+        },
+        'SAE': {
+            'name': 'Generator 2 (SAE)',
+            'inlet': 'FT7',
+            'outlet': 'FT8',
+            'inlet_label': 'SAE INLET',
+            'outlet_label': 'SAE OUTLET'
+        }
+    }
+    
+    if group not in group_config:
+        return None
+    
+    config = group_config[group]
+    deviceid = "susanmpa"
+    
+    try:
+        start_dt = parse_dt(start)
+        end_dt = parse_dt(end)
+    except Exception as e:
+        print(f"Date parsing error: {e}")
+        return None
+    
+    # Fetch all entities
+    query = f"PartitionKey eq '{deviceid}'"
+    entities = list(table_client_2.query_entities(query))
+    
+    # Filter entities by time range
+    filtered_entities = []
+    for e in entities:
+        ts = e.get("TimestampIST")
+        if not ts:
+            continue
+        try:
+            ts_dt = parse_dt(ts)
+            if start_dt <= ts_dt <= end_dt:
+                filtered_entities.append(e)
+        except:
+            continue
+    
+    if not filtered_entities:
+        return {
+            'group': group,
+            'name': config['name'],
+            'inlet_meter': config['inlet'],
+            'outlet_meter': config['outlet'],
+            'inlet_label': config['inlet_label'],
+            'outlet_label': config['outlet_label'],
+            'records': [],
+            'total_consumption': 0,
+            'avg_consumption': 0,
+            'record_count': 0,
+            'interval': interval
+        }
+    
+    # Sort entities by timestamp
+    filtered_entities.sort(key=lambda x: x.get('TimestampIST', ''))
+    
+    # Process records and calculate consumption based on interval
+    records = []
+    consumption_by_interval = {}
+    
+    for e in filtered_entities:
+        ts = e.get("TimestampIST")
+        ts_dt = parse_dt(ts)
+        
+        # Get inlet and outlet volume total values
+        inlet_vol_total = float(e.get(config['inlet'] + "Volumetotal", 0) or 0)
+        outlet_vol_total = float(e.get(config['outlet'] + "Volumetotal", 0) or 0)
+        
+        # Calculate consumption (Inlet - Outlet)
+        consumption = inlet_vol_total - outlet_vol_total
+        
+        # Determine interval key based on selected interval
+        if interval == 'minute':
+            interval_key = ts_dt.strftime("%Y-%m-%d %H:%M")
+        elif interval == 'hour':
+            interval_key = ts_dt.strftime("%Y-%m-%d %H:00")
+        elif interval == 'daily':
+            interval_key = ts_dt.strftime("%Y-%m-%d")
+        elif interval == 'monthly':
+            interval_key = ts_dt.strftime("%Y-%m")
+        elif interval == 'yearly':
+            interval_key = ts_dt.strftime("%Y")
+        else:  # raw data
+            interval_key = ts
+        
+        record = {
+            "Timestamp": ts,
+            "Interval": interval_key,
+            "InletMeter": config['inlet'],
+            "OutletMeter": config['outlet'],
+            "InletVolumeTotal": round(inlet_vol_total, 5),
+            "OutletVolumeTotal": round(outlet_vol_total, 5),
+            "Consumption": round(consumption, 5),
+            "InletMassFlow": round(float(e.get(config['inlet'] + "MassFlow", 0) or 0), 5),
+            "OutletMassFlow": round(float(e.get(config['outlet'] + "MassFlow", 0) or 0), 5),
+            "InletTemp": round(float(e.get(config['inlet'] + "Temp", 0) or 0), 2),
+            "OutletTemp": round(float(e.get(config['outlet'] + "Temp", 0) or 0), 2),
+            "InletDensity": round(float(e.get(config['inlet'] + "Density", 0) or 0), 2),
+            "OutletDensity": round(float(e.get(config['outlet'] + "Density", 0) or 0), 2)
+        }
+        
+        if interval != 'raw':
+            # Aggregate by interval
+            if interval_key not in consumption_by_interval:
+                consumption_by_interval[interval_key] = {
+                    'count': 0,
+                    'total_inlet_vol': 0,
+                    'total_outlet_vol': 0,
+                    'total_consumption': 0,
+                    'avg_inlet_mass': 0,
+                    'avg_outlet_mass': 0,
+                    'avg_inlet_temp': 0,
+                    'avg_outlet_temp': 0,
+                    'avg_inlet_density': 0,
+                    'avg_outlet_density': 0,
+                    'first_timestamp': ts
+                }
+            
+            agg = consumption_by_interval[interval_key]
+            agg['count'] += 1
+            agg['total_inlet_vol'] += inlet_vol_total
+            agg['total_outlet_vol'] += outlet_vol_total
+            agg['total_consumption'] += consumption
+            agg['avg_inlet_mass'] += float(e.get(config['inlet'] + "MassFlow", 0) or 0)
+            agg['avg_outlet_mass'] += float(e.get(config['outlet'] + "MassFlow", 0) or 0)
+            agg['avg_inlet_temp'] += float(e.get(config['inlet'] + "Temp", 0) or 0)
+            agg['avg_outlet_temp'] += float(e.get(config['outlet'] + "Temp", 0) or 0)
+            agg['avg_inlet_density'] += float(e.get(config['inlet'] + "Density", 0) or 0)
+            agg['avg_outlet_density'] += float(e.get(config['outlet'] + "Density", 0) or 0)
+        else:
+            records.append(record)
+    
+    # Create aggregated records for intervals
+    if interval != 'raw':
+        for interval_key, agg in consumption_by_interval.items():
+            count = agg['count']
+            records.append({
+                "Timestamp": agg['first_timestamp'],
+                "Interval": interval_key,
+                "InletMeter": config['inlet'],
+                "OutletMeter": config['outlet'],
+                "InletVolumeTotal": round(agg['total_inlet_vol'], 5),
+                "OutletVolumeTotal": round(agg['total_outlet_vol'], 5),
+                "Consumption": round(agg['total_consumption'], 5),
+                "InletMassFlow": round(agg['avg_inlet_mass'] / count, 5),
+                "OutletMassFlow": round(agg['avg_outlet_mass'] / count, 5),
+                "InletTemp": round(agg['avg_inlet_temp'] / count, 2),
+                "OutletTemp": round(agg['avg_outlet_temp'] / count, 2),
+                "InletDensity": round(agg['avg_inlet_density'] / count, 2),
+                "OutletDensity": round(agg['avg_outlet_density'] / count, 2),
+                "RecordCount": count
+            })
+        
+        # Sort by timestamp
+        records.sort(key=lambda x: x['Timestamp'])
+    
+    total_consumption = sum(r['Consumption'] for r in records)
+    avg_consumption = total_consumption / len(records) if records else 0
+    
+    return {
+        'group': group,
+        'name': config['name'],
+        'inlet_meter': config['inlet'],
+        'outlet_meter': config['outlet'],
+        'inlet_label': config['inlet_label'],
+        'outlet_label': config['outlet_label'],
+        'records': records,
+        'total_consumption': round(total_consumption, 5),
+        'avg_consumption': round(avg_consumption, 5),
+        'record_count': len(records),
+        'interval': interval
+    }
+
+
+@app.route("/download_group_csv")
+@login_required
+def download_group_csv():
+    try:
+        group = request.args.get("group")
+        start = request.args.get("start").replace("T", " ")
+        end = request.args.get("end").replace("T", " ")
+        interval = request.args.get("interval", "raw")
+        
+        print(f"Group CSV Request - Group: {group}, Interval: {interval}, Start: {start}, End: {end}")
+        
+        result = fetch_group_data(group, start, end, interval)
+        
+        if not result:
+            return jsonify({"error": "Invalid group"}), 400
+        
+        # Create DataFrame from records
+        if result['records']:
+            df = pd.DataFrame(result['records'])
+            
+            # Reorder columns based on interval
+            if interval == 'raw':
+                column_order = [
+                    'Timestamp', 'InletMeter', 'OutletMeter', 
+                    'InletVolumeTotal', 'OutletVolumeTotal', 'Consumption',
+                    'InletMassFlow', 'OutletMassFlow', 
+                    'InletTemp', 'OutletTemp',
+                    'InletDensity', 'OutletDensity'
+                ]
+            else:
+                column_order = [
+                    'Interval', 'RecordCount', 'InletMeter', 'OutletMeter',
+                    'InletVolumeTotal', 'OutletVolumeTotal', 'Consumption',
+                    'InletMassFlow', 'OutletMassFlow', 
+                    'InletTemp', 'OutletTemp',
+                    'InletDensity', 'OutletDensity'
+                ]
+            
+            # Filter only available columns
+            column_order = [col for col in column_order if col in df.columns]
+            df = df[column_order]
+            
+            # Add summary row
+            summary = pd.DataFrame([{
+                'Interval': 'SUMMARY' if interval != 'raw' else 'SUMMARY',
+                'RecordCount': result['record_count'],
+                'InletVolumeTotal': '',
+                'OutletVolumeTotal': '',
+                'Consumption': result['total_consumption'],
+                'InletMassFlow': '',
+                'OutletMassFlow': '',
+                'InletTemp': '',
+                'OutletTemp': '',
+                'InletDensity': '',
+                'OutletDensity': ''
+            }])
+            
+            # Fill missing columns in summary
+            for col in column_order:
+                if col not in summary.columns:
+                    summary[col] = ''
+            
+            df = pd.concat([df, summary], ignore_index=True)
+        else:
+            df = pd.DataFrame([{
+                'Timestamp': 'No data found',
+                'Interval': 'No data',
+                'InletMeter': group,
+                'OutletMeter': '',
+                'InletVolumeTotal': 0,
+                'OutletVolumeTotal': 0,
+                'Consumption': 0,
+                'Message': f'No records found for {group} from {start} to {end}'
+            }])
+        
+        output = BytesIO()
+        df.to_csv(output, index=False)
+        output.seek(0)
+        
+        filename = f"{group}_{interval}_consumption_{start.replace(' ', '_')}_to_{end.replace(' ', '_')}.csv"
+        
+        return send_file(
+            output,
+            mimetype="text/csv",
+            download_name=filename,
+            as_attachment=True
+        )
+        
+    except Exception as e:
+        print(f"Group CSV download error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/download_group_pdf")
+@login_required
+def download_group_pdf():
+    try:
+        group = request.args.get("group")
+        start = request.args.get("start").replace("T", " ")
+        end = request.args.get("end").replace("T", " ")
+        interval = request.args.get("interval", "raw")
+        
+        print(f"Group PDF Request - Group: {group}, Interval: {interval}, Start: {start}, End: {end}")
+        
+        result = fetch_group_data(group, start, end, interval)
+        
+        if not result:
+            return jsonify({"error": "Invalid group"}), 400
+        
+        buffer = BytesIO()
+        
+        if not result['records']:
+            from reportlab.pdfgen import canvas
+            from reportlab.lib.pagesizes import letter
+            
+            c = canvas.Canvas(buffer, pagesize=letter)
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(100, 750, f"No Data Found for {result['name']}")
+            c.setFont("Helvetica", 12)
+            c.drawString(100, 720, f"Group: {group}")
+            c.drawString(100, 700, f"From: {start}")
+            c.drawString(100, 680, f"To: {end}")
+            c.drawString(100, 660, f"Interval: {interval}")
+            c.drawString(100, 640, f"Meters: {result['inlet_label']} - {result['outlet_label']}")
+            c.save()
+        else:
+            from reportlab.lib.pagesizes import landscape, letter
+            from reportlab.pdfgen import canvas
+            from math import ceil
+            
+            c = canvas.Canvas(buffer, pagesize=landscape(letter))
+            
+            # Summary Page
+            c.setFont("Helvetica-Bold", 16)
+            c.drawString(50, 550, f"{result['name']} Consumption Report")
+            
+            c.setFont("Helvetica", 12)
+            c.drawString(50, 520, f"From: {start}")
+            c.drawString(350, 520, f"To: {end}")
+            c.drawString(50, 500, f"Interval: {interval.upper()}")
+            c.drawString(350, 500, f"Meters: {result['inlet_label']} - {result['outlet_label']}")
+            
+            # Summary Statistics
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(50, 450, "Summary Statistics")
+            
+            c.setFont("Helvetica", 12)
+            c.drawString(50, 420, f"Total Records: {result['record_count']}")
+            c.drawString(50, 400, f"Total Consumption: {result['total_consumption']} L")
+            c.drawString(50, 380, f"Average Consumption: {result['avg_consumption']} L")
+            
+            # Add line
+            c.line(50, 350, 750, 350)
+            
+            # New page for detailed data
+            c.showPage()
+            
+            # Detailed Data Page
+            c.setFont("Helvetica-Bold", 14)
+            c.drawString(50, 550, f"{result['name']} - {interval.upper()} Readings")
+            c.setFont("Helvetica", 10)
+            c.drawString(50, 530, f"From: {start}  To: {end}")
+            
+            # Table headers based on interval
+            y = 500
+            c.setFont("Helvetica-Bold", 8)
+            
+            if interval == 'raw':
+                c.drawString(50, y, "Timestamp")
+                c.drawString(200, y, "Inlet Vol")
+                c.drawString(270, y, "Outlet Vol")
+                c.drawString(340, y, "Consumption")
+                c.drawString(410, y, "Inlet Mass")
+                c.drawString(480, y, "Outlet Mass")
+                c.drawString(550, y, "Inlet Temp")
+                c.drawString(620, y, "Outlet Temp")
+            else:
+                c.drawString(50, y, "Interval")
+                c.drawString(150, y, "Count")
+                c.drawString(200, y, "Inlet Vol")
+                c.drawString(270, y, "Outlet Vol")
+                c.drawString(340, y, "Consumption")
+                c.drawString(410, y, "Inlet Mass")
+                c.drawString(480, y, "Outlet Mass")
+                c.drawString(550, y, "Inlet Temp")
+                c.drawString(620, y, "Outlet Temp")
+            
+            y -= 15
+            c.setFont("Helvetica", 7)
+            
+            # Calculate pages needed
+            records_per_page = 30
+            total_pages = ceil(len(result['records']) / records_per_page)
+            current_record = 0
+            
+            for page in range(total_pages):
+                if page > 0:
+                    c.showPage()
+                    y = 550
+                    c.setFont("Helvetica-Bold", 8)
+                    c.drawString(50, y, f"{result['name']} - {interval.upper()} - Page {page+1}/{total_pages}")
+                    y -= 20
+                    c.setFont("Helvetica-Bold", 8)
+                    
+                    if interval == 'raw':
+                        c.drawString(50, y, "Timestamp")
+                        c.drawString(200, y, "Inlet Vol")
+                        c.drawString(270, y, "Outlet Vol")
+                        c.drawString(340, y, "Consumption")
+                        c.drawString(410, y, "Inlet Mass")
+                        c.drawString(480, y, "Outlet Mass")
+                        c.drawString(550, y, "Inlet Temp")
+                        c.drawString(620, y, "Outlet Temp")
+                    else:
+                        c.drawString(50, y, "Interval")
+                        c.drawString(150, y, "Count")
+                        c.drawString(200, y, "Inlet Vol")
+                        c.drawString(270, y, "Outlet Vol")
+                        c.drawString(340, y, "Consumption")
+                        c.drawString(410, y, "Inlet Mass")
+                        c.drawString(480, y, "Outlet Mass")
+                        c.drawString(550, y, "Inlet Temp")
+                        c.drawString(620, y, "Outlet Temp")
+                    
+                    y -= 15
+                    c.setFont("Helvetica", 7)
+                
+                page_records = result['records'][page * records_per_page:(page + 1) * records_per_page]
+                
+                for record in page_records:
+                    if y < 50:
+                        break
+                    
+                    if interval == 'raw':
+                        c.drawString(50, y, str(record['Timestamp'])[:16])
+                        c.drawString(200, y, f"{record['InletVolumeTotal']:.2f}")
+                        c.drawString(270, y, f"{record['OutletVolumeTotal']:.2f}")
+                        c.drawString(340, y, f"{record['Consumption']:.2f}")
+                        c.drawString(410, y, f"{record['InletMassFlow']:.2f}")
+                        c.drawString(480, y, f"{record['OutletMassFlow']:.2f}")
+                        c.drawString(550, y, f"{record['InletTemp']:.1f}")
+                        c.drawString(620, y, f"{record['OutletTemp']:.1f}")
+                    else:
+                        c.drawString(50, y, str(record['Interval']))
+                        c.drawString(150, y, str(record.get('RecordCount', 1)))
+                        c.drawString(200, y, f"{record['InletVolumeTotal']:.2f}")
+                        c.drawString(270, y, f"{record['OutletVolumeTotal']:.2f}")
+                        c.drawString(340, y, f"{record['Consumption']:.2f}")
+                        c.drawString(410, y, f"{record['InletMassFlow']:.2f}")
+                        c.drawString(480, y, f"{record['OutletMassFlow']:.2f}")
+                        c.drawString(550, y, f"{record['InletTemp']:.1f}")
+                        c.drawString(620, y, f"{record['OutletTemp']:.1f}")
+                    
+                    y -= 12
+                    current_record += 1
+            
+            c.save()
+        
+        buffer.seek(0)
+        
+        filename = f"{group}_{interval}_consumption_{start.replace(' ', '_')}_to_{end.replace(' ', '_')}.pdf"
+        
+        return send_file(
+            buffer,
+            mimetype="application/pdf",
+            download_name=filename,
+            as_attachment=True
+        )
+        
+    except Exception as e:
+        print(f"Group PDF download error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+# =========================
+# CSV DOWNLOAD (Original - Kept for backward compatibility)
 # =========================
 @app.route("/download_csv")
 @login_required
 def download_csv():
-
     prefix = request.args.get("type")
     start = request.args.get("start").replace("T", " ")
     end = request.args.get("end").replace("T", " ")
@@ -473,6 +1044,8 @@ def download_csv():
         download_name="report.csv",
         as_attachment=True
     )
+
+
 
 
 # =========================
@@ -728,6 +1301,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
