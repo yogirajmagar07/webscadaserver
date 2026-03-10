@@ -70,23 +70,18 @@ button:hover {
     opacity: 0.9;
 }
 
-.btn-blue{
-    background:#2e86de;
-    color:white;
-}
-
 .btn-green{
     background:#27ae60;
     color:white;
 }
 
-.btn-red{
-    background:#e74c3c;
+.btn-purple{
+    background:#9b59b6;
     color:white;
 }
 
-.btn-purple{
-    background:#9b59b6;
+.btn-red{
+    background:#e74c3c;
     color:white;
 }
 
@@ -128,6 +123,36 @@ button:hover {
     100% { transform: rotate(360deg); }
 }
 
+/* Info section for selected group */
+.info-section {
+    background: #2c3e50;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+    color: white;
+    border-left: 4px solid #ffd700;
+}
+
+.info-title {
+    font-size: 16px;
+    font-weight: bold;
+    margin-bottom: 5px;
+}
+
+.info-details {
+    font-size: 14px;
+    opacity: 0.9;
+}
+
+.info-formula {
+    font-family: monospace;
+    background: #1a3450;
+    padding: 8px;
+    border-radius: 4px;
+    margin-top: 8px;
+    font-size: 13px;
+}
+
 /* Responsive */
 @media screen and (max-width: 768px){
     .filter-section {
@@ -145,9 +170,7 @@ button:hover {
 <body>
 
 <div class="header">
-
     <span style="font-weight:bold">MP AHTS-1 Flow Meter Reports</span>
-
     <div style="float:right">
         <a href="/" style="color:white;margin-right:15px;">Dashboard</a>
         <a href="/reports" style="color:white;margin-right:15px;">Reports</a>
@@ -155,11 +178,9 @@ button:hover {
             <button class="btn-red" style="padding:6px 12px;">Logout</button>
         </a>
     </div>
-
 </div>
 
 <div class="reportBox">
-
     <h3>📊 Generate Flow Meter Report</h3>
     
     <div class="status-message" id="statusMessage"></div>
@@ -198,15 +219,63 @@ button:hover {
         </div>
     </div>
 
+    <!-- Info Section -->
+    <div class="info-section" id="infoSection">
+        <div class="info-title" id="infoTitle">PME - Main Engine (P)</div>
+        <div class="info-details" id="infoDetails">FT1 Volume Total - FT2 Volume Total</div>
+        <div class="info-formula" id="infoFormula">Consumption = FT1VolumeTotal - FT2VolumeTotal (Liters)</div>
+    </div>
+
     <div style="margin-top: 20px;">
         <button class="btn-green" onclick="downloadCSV()" id="csvBtn">📥 Download CSV</button>
         <button class="btn-purple" onclick="downloadPDF()" id="pdfBtn">📄 Download PDF</button>
         <button class="btn-red" onclick="resetFilters()">🔄 Reset</button>
     </div>
-
 </div>
 
 <script>
+// Engine group configuration
+const engineConfig = {
+    'PME': {
+        name: 'PME - Main Engine (P)',
+        formula: 'FT1 Volume Total - FT2 Volume Total',
+        description: 'FT1VolumeTotal - FT2VolumeTotal',
+        meters: 'FT1 (Inlet), FT2 (Outlet)'
+    },
+    'SME': {
+        name: 'SME - Main Engine (S)',
+        formula: 'FT3 Volume Total - FT4 Volume Total',
+        description: 'FT3VolumeTotal - FT4VolumeTotal',
+        meters: 'FT3 (Inlet), FT4 (Outlet)'
+    },
+    'PAE': {
+        name: 'PAE - Auxiliary Engine (P)',
+        formula: 'FT5 Volume Total - FT6 Volume Total',
+        description: 'FT5VolumeTotal - FT6VolumeTotal',
+        meters: 'FT5 (Inlet), FT6 (Outlet)'
+    },
+    'SAE': {
+        name: 'SAE - Auxiliary Engine (S)',
+        formula: 'FT7 Volume Total - FT8 Volume Total',
+        description: 'FT7VolumeTotal - FT8VolumeTotal',
+        meters: 'FT7 (Inlet), FT8 (Outlet)'
+    },
+    'consumpution': {
+        name: 'TOTAL - Total Consumption',
+        formula: 'FT9 Volume Total',
+        description: 'FT9VolumeTotal',
+        meters: 'FT9 (Bunker Flow)'
+    }
+};
+
+const intervalConfig = {
+    'minute': 'Data grouped by minute',
+    'hour': 'Data grouped by hour',
+    'daily': 'Data grouped by day',
+    'monthly': 'Data grouped by month',
+    'yearly': 'Data grouped by year'
+};
+
 function showStatus(message, type) {
     let statusEl = document.getElementById('statusMessage');
     statusEl.style.display = 'block';
@@ -225,13 +294,27 @@ function setLoading(isLoading, buttonId) {
         btn.innerHTML = '<span class="loading"></span> Processing...';
     } else {
         btn.disabled = false;
-        btn.innerHTML = btn.innerHTML.replace('<span class="loading"></span> Processing...', 
-            buttonId === 'csvBtn' ? '📥 Download CSV' : '📄 Download PDF');
+        btn.innerHTML = buttonId === 'csvBtn' ? '📥 Download CSV' : '📄 Download PDF';
     }
 }
 
+function updateGroupInfo() {
+    let group = document.getElementById('engineGroup').value;
+    let config = engineConfig[group];
+    
+    document.getElementById('infoTitle').innerHTML = config.name;
+    document.getElementById('infoDetails').innerHTML = `${config.formula}`;
+    document.getElementById('infoFormula').innerHTML = `Consumption = ${config.description} (Liters) | Meters: ${config.meters}`;
+}
+
+function updateIntervalInfo() {
+    let interval = document.getElementById('interval').value;
+    let info = intervalConfig[interval];
+    // You can display this info somewhere if needed
+    console.log(`Interval selected: ${info}`);
+}
+
 function formatDateTimeForAPI(dateTimeLocal) {
-    // Convert from datetime-local to format expected by API (YYYY-MM-DD HH:MM:SS)
     return dateTimeLocal.replace('T', ' ') + ':00';
 }
 
@@ -244,7 +327,6 @@ function validateInputs() {
         return false;
     }
     
-    // Validate that from time is before to time
     if (new Date(fromTime) >= new Date(toTime)) {
         showStatus("❌ From time must be before To time", "error");
         return false;
@@ -258,7 +340,8 @@ function downloadCSV() {
     
     let fromTime = document.getElementById("fromTime").value;
     let toTime = document.getElementById("toTime").value;
-    let meterType = document.getElementById("meterType").value;
+    let engineGroup = document.getElementById("engineGroup").value;
+    let interval = document.getElementById("interval").value;
     
     setLoading(true, 'csvBtn');
     
@@ -266,20 +349,15 @@ function downloadCSV() {
         let fromFormatted = formatDateTimeForAPI(fromTime);
         let toFormatted = formatDateTimeForAPI(toTime);
         
-        // Use the server-side CSV download
-        let url = `/download_csv?type=${meterType}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
+        let url = `/download_csv?type=${engineGroup}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}&interval=${interval}`;
         
-        // Trigger download
         window.location.href = url;
-        
         showStatus("📥 CSV download started. Please check your downloads folder.", "success");
     } catch (error) {
         console.error('CSV download error:', error);
         showStatus(`❌ Error downloading CSV: ${error.message}`, "error");
     } finally {
-        setTimeout(() => {
-            setLoading(false, 'csvBtn');
-        }, 2000);
+        setTimeout(() => setLoading(false, 'csvBtn'), 2000);
     }
 }
 
@@ -288,7 +366,8 @@ function downloadPDF() {
     
     let fromTime = document.getElementById("fromTime").value;
     let toTime = document.getElementById("toTime").value;
-    let meterType = document.getElementById("meterType").value;
+    let engineGroup = document.getElementById("engineGroup").value;
+    let interval = document.getElementById("interval").value;
     
     setLoading(true, 'pdfBtn');
     
@@ -296,31 +375,46 @@ function downloadPDF() {
         let fromFormatted = formatDateTimeForAPI(fromTime);
         let toFormatted = formatDateTimeForAPI(toTime);
         
-        // Use the server-side PDF download
-        let url = `/download_pdf?type=${meterType}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}`;
+        let url = `/download_pdf?type=${engineGroup}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}&interval=${interval}`;
         
-        // Trigger download
         window.location.href = url;
-        
         showStatus("📄 PDF download started. Please check your downloads folder.", "success");
     } catch (error) {
         console.error('PDF download error:', error);
         showStatus(`❌ Error downloading PDF: ${error.message}`, "error");
     } finally {
-        setTimeout(() => {
-            setLoading(false, 'pdfBtn');
-        }, 2000);
+        setTimeout(() => setLoading(false, 'pdfBtn'), 2000);
     }
 }
 
 function resetFilters() {
-    document.getElementById("fromTime").value = '';
-    document.getElementById("toTime").value = '';
-    document.getElementById("meterType").value = 'FT1';
+    let end = new Date();
+    let start = new Date(end.getTime() - (24 * 60 * 60 * 1000));
+    
+    let formatDateTime = (date) => {
+        let year = date.getFullYear();
+        let month = String(date.getMonth() + 1).padStart(2, '0');
+        let day = String(date.getDate()).padStart(2, '0');
+        let hours = String(date.getHours()).padStart(2, '0');
+        let minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${year}-${month}-${day}T${hours}:${minutes}`;
+    };
+    
+    document.getElementById("fromTime").value = formatDateTime(start);
+    document.getElementById("toTime").value = formatDateTime(end);
+    document.getElementById("engineGroup").value = 'PME';
+    document.getElementById("interval").value = 'hour';
     document.getElementById("statusMessage").style.display = 'none';
+    updateGroupInfo();
 }
 
-// Set default dates (last 24 hours)
+// Initialize on page load
+window.onload = function() {
+    setDefaultDates();
+    updateGroupInfo();
+    updateIntervalInfo();
+};
+
 function setDefaultDates() {
     let end = new Date();
     let start = new Date(end.getTime() - (24 * 60 * 60 * 1000));
@@ -337,487 +431,7 @@ function setDefaultDates() {
     document.getElementById("fromTime").value = formatDateTime(start);
     document.getElementById("toTime").value = formatDateTime(end);
 }
-
-// Initialize on page load
-setDefaultDates();
 </script>
 
 </body>
 </html>
-
-<!-- <!DOCTYPE html>
-<html>
-<head>
-<meta charset="UTF-8">
-<title>Flow Meter Reports - Engine Consumption</title>
-<style>
-body{
-    font-family: Arial;
-    background:#e9e9e9;
-    margin:0;
-}
-
-.header{
-    background:black;
-    color:white;
-    padding:15px;
-    font-size:20px;
-    overflow: auto;
-}
-
-.reportBox{
-    background:#234461;
-    margin:20px;
-    padding:20px;
-    border-radius:12px;
-    color:white;
-    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-}
-
-.filter-section {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-    gap: 15px;
-    margin-bottom: 20px;
-}
-
-.filter-item {
-    display: flex;
-    flex-direction: column;
-}
-
-.filter-item label {
-    font-size: 12px;
-    opacity: 0.8;
-    margin-bottom: 5px;
-}
-
-input, select{
-    padding:10px;
-    border-radius:6px;
-    border:none;
-    background: white;
-    font-size: 14px;
-}
-
-button{
-    padding:10px 20px;
-    border:none;
-    border-radius:6px;
-    cursor:pointer;
-    font-size: 14px;
-    font-weight: bold;
-    margin-right: 10px;
-    margin-bottom: 10px;
-    transition: opacity 0.3s;
-}
-
-button:hover {
-    opacity: 0.9;
-}
-
-.btn-green{
-    background:#27ae60;
-    color:white;
-}
-
-.btn-purple{
-    background:#9b59b6;
-    color:white;
-}
-
-.btn-red{
-    background:#e74c3c;
-    color:white;
-}
-
-.btn-blue{
-    background:#2e86de;
-    color:white;
-}
-
-.status-message {
-    margin: 10px 0;
-    padding: 10px;
-    border-radius: 4px;
-    display: none;
-}
-
-.status-success {
-    background: #27ae60;
-    color: white;
-}
-
-.status-error {
-    background: #e74c3c;
-    color: white;
-}
-
-.status-info {
-    background: #2e86de;
-    color: white;
-}
-
-.loading {
-    display: inline-block;
-    width: 20px;
-    height: 20px;
-    border: 3px solid #f3f3f3;
-    border-top: 3px solid #3498db;
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-    margin-right: 10px;
-}
-
-@keyframes spin {
-    0% { transform: rotate(0deg); }
-    100% { transform: rotate(360deg); }
-}
-
-.user-info {
-    float: right;
-    color: white;
-    margin-right: 20px;
-}
-
-.user-info a {
-    color: white;
-    text-decoration: none;
-}
-
-.user-info a:hover {
-    text-decoration: underline;
-}
-
-.report-type-info {
-    background: #2c3e50;
-    padding: 15px;
-    border-radius: 8px;
-    margin: 15px 0;
-    font-size: 14px;
-    border-left: 4px solid #ffd700;
-}
-
-.meter-pair {
-    display: flex;
-    justify-content: space-around;
-    margin-top: 10px;
-    padding: 10px;
-    background: #1a3450;
-    border-radius: 5px;
-}
-
-.meter-item {
-    text-align: center;
-}
-
-.meter-item .label {
-    font-size: 11px;
-    opacity: 0.7;
-}
-
-.meter-item .value {
-    font-size: 16px;
-    font-weight: bold;
-    color: #ffd700;
-}
-
-.interval-info {
-    font-size: 12px;
-    color: #ffd700;
-    margin-top: 5px;
-    font-style: italic;
-}
-</style>
-</head>
-<body>
-
-<div class="header">
-    <span style="font-weight:bold">MP AHTS-1 Engine Consumption Reports</span>
-    
-    <div class="user-info">
-        <span>Welcome, <span id="username"></span> | </span>
-        <a href="/logout">Logout</a>
-    </div>
-</div>
-
-<div class="reportBox">
-    <h3>📊 Generate Engine Consumption Report</h3>
-    
-    <div class="status-message" id="statusMessage"></div>
-
-    <div class="filter-section">
-        <div class="filter-item">
-            <label>📅 From Time</label>
-            <input type="datetime-local" id="fromTime" step="1" required>
-        </div>
-
-        <div class="filter-item">
-            <label>📅 To Time</label>
-            <input type="datetime-local" id="toTime" step="1" required>
-        </div>
-
-        <div class="filter-item">
-            <label>⚙️ Select Engine/Generator</label>
-            <select id="engineGroup" onchange="updateGroupInfo()">
-                <option value="PME">PME - Main Engine 1 (FT1 - FT2)</option>
-                <option value="SME">SME - Main Engine 2 (FT3 - FT4)</option>
-                <option value="PAE">PAE - Generator 1 (FT5 - FT6)</option>
-                <option value="SAE">SAE - Generator 2 (FT7 - FT8)</option>
-            </select>
-        </div>
-
-        <div class="filter-item">
-            <label>⏱️ Interval</label>
-            <select id="interval" onchange="updateIntervalInfo()">
-                <option value="minute">Minute Wise (Raw Data)</option>
-                <option value="hour" selected>Hour Wise (Hourly Summary)</option>
-                <option value="daily">Daily Wise (Daily Summary)</option>
-                <option value="monthly">Monthly Wise (Monthly Summary)</option>
-                <option value="yearly">Yearly Wise (Yearly Summary)</option>
-            </select>
-            <div class="interval-info" id="intervalInfo">Data grouped by hour</div>
-        </div>
-    </div>
-
-    <div class="report-type-info" id="groupInfo">
-        <strong>📋 Selected: PME - Main Engine 1</strong><br>
-        <span>Meters: FT1 (Inlet) - FT2 (Outlet)</span>
-        <div class="meter-pair">
-            <div class="meter-item">
-                <div class="label">Inlet Meter</div>
-                <div class="value">FT1 (PME INLET)</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">➡️</div>
-                <div class="value">-</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">Outlet Meter</div>
-                <div class="value">FT2 (PME OUTLET)</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">⬇️</div>
-                <div class="value">=</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">Consumption</div>
-                <div class="value">Volume (L)</div>
-            </div>
-        </div>
-    </div>
-
-    <div style="margin-top: 20px;">
-        <button class="btn-green" onclick="downloadCSV()" id="csvBtn">📥 Download Consumption CSV</button>
-        <button class="btn-purple" onclick="downloadPDF()" id="pdfBtn">📄 Download Consumption PDF</button>
-        <button class="btn-red" onclick="resetFilters()">🔄 Reset</button>
-    </div>
-</div>
-
-<script>
-const groupConfig = {
-    'PME': {
-        name: 'Main Engine 1 (PME)',
-        inlet: 'FT1',
-        outlet: 'FT2',
-        inletLabel: 'PME INLET',
-        outletLabel: 'PME OUTLET'
-    },
-    'SME': {
-        name: 'Main Engine 2 (SME)',
-        inlet: 'FT3',
-        outlet: 'FT4',
-        inletLabel: 'SME INLET',
-        outletLabel: 'SME OUTLET'
-    },
-    'PAE': {
-        name: 'Generator 1 (PAE)',
-        inlet: 'FT5',
-        outlet: 'FT6',
-        inletLabel: 'PAE INLET',
-        outletLabel: 'PAE OUTLET'
-    },
-    'SAE': {
-        name: 'Generator 2 (SAE)',
-        inlet: 'FT7',
-        outlet: 'FT8',
-        inletLabel: 'SAE INLET',
-        outletLabel: 'SAE OUTLET'
-    }
-};
-
-const intervalConfig = {
-    'minute': 'Raw data - every minute',
-    'hour': 'Grouped by hour',
-    'daily': 'Grouped by day',
-    'monthly': 'Grouped by month',
-    'yearly': 'Grouped by year'
-};
-
-function showStatus(message, type) {
-    let statusEl = document.getElementById('statusMessage');
-    statusEl.style.display = 'block';
-    statusEl.className = 'status-message status-' + type;
-    statusEl.innerHTML = message;
-    setTimeout(() => statusEl.style.display = 'none', 5000);
-}
-
-function setLoading(isLoading, buttonId) {
-    let btn = document.getElementById(buttonId);
-    if (isLoading) {
-        btn.disabled = true;
-        btn.innerHTML = '<span class="loading"></span> Generating...';
-    } else {
-        btn.disabled = false;
-        btn.innerHTML = buttonId === 'csvBtn' ? '📥 Download Consumption CSV' : '📄 Download Consumption PDF';
-    }
-}
-
-function updateGroupInfo() {
-    let group = document.getElementById('engineGroup').value;
-    let config = groupConfig[group];
-    
-    let infoDiv = document.getElementById('groupInfo');
-    infoDiv.innerHTML = `
-        <strong>📋 Selected: ${group} - ${config.name}</strong><br>
-        <span>Meters: ${config.inlet} (${config.inletLabel}) - ${config.outlet} (${config.outletLabel})</span>
-        <div class="meter-pair">
-            <div class="meter-item">
-                <div class="label">Inlet Meter</div>
-                <div class="value">${config.inlet} (${config.inletLabel})</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">➡️</div>
-                <div class="value">-</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">Outlet Meter</div>
-                <div class="value">${config.outlet} (${config.outletLabel})</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">⬇️</div>
-                <div class="value">=</div>
-            </div>
-            <div class="meter-item">
-                <div class="label">Consumption</div>
-                <div class="value">Volume (L)</div>
-            </div>
-        </div>
-    `;
-}
-
-function updateIntervalInfo() {
-    let interval = document.getElementById('interval').value;
-    let info = intervalConfig[interval];
-    document.getElementById('intervalInfo').textContent = info;
-}
-
-function formatDateTimeForAPI(dateTimeLocal) {
-    return dateTimeLocal.replace('T', ' ') + ':00';
-}
-
-function validateInputs() {
-    let fromTime = document.getElementById("fromTime").value;
-    let toTime = document.getElementById("toTime").value;
-    if(!fromTime || !toTime){
-        showStatus("❌ Please select From and To time", "error");
-        return false;
-    }
-    
-    // Validate date range based on interval
-    let from = new Date(fromTime);
-    let to = new Date(toTime);
-    let interval = document.getElementById("interval").value;
-    
-    let daysDiff = (to - from) / (1000 * 60 * 60 * 24);
-    
-    if (interval === 'minute' && daysDiff > 7) {
-        if (!confirm("You selected minute interval for a period longer than 7 days. This may generate a large file. Continue?")) {
-            return false;
-        }
-    }
-    
-    if (interval === 'hour' && daysDiff > 31) {
-        if (!confirm("You selected hour interval for a period longer than 31 days. This may generate a large file. Continue?")) {
-            return false;
-        }
-    }
-    
-    return true;
-}
-
-function downloadCSV() {
-    if (!validateInputs()) return;
-    
-    let fromTime = document.getElementById("fromTime").value;
-    let toTime = document.getElementById("toTime").value;
-    let group = document.getElementById("engineGroup").value;
-    let interval = document.getElementById("interval").value;
-    
-    setLoading(true, 'csvBtn');
-    
-    try {
-        let fromFormatted = formatDateTimeForAPI(fromTime);
-        let toFormatted = formatDateTimeForAPI(toTime);
-        
-        window.location.href = `/download_group_csv?group=${group}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}&interval=${interval}`;
-        showStatus(`📥 ${group} ${interval} consumption report download started`, "success");
-    } catch (error) {
-        showStatus(`❌ Error: ${error.message}`, "error");
-    } finally {
-        setTimeout(() => setLoading(false, 'csvBtn'), 2000);
-    }
-}
-
-function downloadPDF() {
-    if (!validateInputs()) return;
-    
-    let fromTime = document.getElementById("fromTime").value;
-    let toTime = document.getElementById("toTime").value;
-    let group = document.getElementById("engineGroup").value;
-    let interval = document.getElementById("interval").value;
-    
-    setLoading(true, 'pdfBtn');
-    
-    try {
-        let fromFormatted = formatDateTimeForAPI(fromTime);
-        let toFormatted = formatDateTimeForAPI(toTime);
-        
-        window.location.href = `/download_group_pdf?group=${group}&start=${encodeURIComponent(fromFormatted)}&end=${encodeURIComponent(toFormatted)}&interval=${interval}`;
-        showStatus(`📄 ${group} ${interval} consumption report download started`, "success");
-    } catch (error) {
-        showStatus(`❌ Error: ${error.message}`, "error");
-    } finally {
-        setTimeout(() => setLoading(false, 'pdfBtn'), 2000);
-    }
-}
-
-function resetFilters() {
-    document.getElementById("fromTime").value = '';
-    document.getElementById("toTime").value = '';
-    document.getElementById("engineGroup").value = 'PME';
-    document.getElementById("interval").value = 'hour';
-    updateGroupInfo();
-    updateIntervalInfo();
-}
-
-// Set default dates based on interval
-function setDefaultDates() {
-    let end = new Date();
-    let start = new Date(end.getTime() - (24 * 60 * 60 * 1000)); // Last 24 hours
-    
-    let formatDateTime = (date) => {
-        return date.toISOString().slice(0, 16);
-    };
-    
-    document.getElementById("fromTime").value = formatDateTime(start);
-    document.getElementById("toTime").value = formatDateTime(end);
-}
-
-// Initialize
-setDefaultDates();
-updateGroupInfo();
-updateIntervalInfo();
-</script>
-</body>
-</html> -->
