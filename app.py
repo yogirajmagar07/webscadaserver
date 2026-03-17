@@ -269,8 +269,8 @@ def api_readings():
                 "measurementStartTime": current_start.strftime("%Y-%m-%d %H:%M:%S"),
                 "measurementEndTime": (current_end - timedelta(seconds=1)).strftime("%Y-%m-%d %H:%M:%S"),
                 "kind": "VESSEL",
-                "mmsi": "419001409",
-                "imo": "933632",
+                "mmsi": "419001491",
+                "imo": "9320910",
                 "consumption": {
                     "mainEnginesTotal": round(total_main_engines, 8),
                     "generatorsTotal": round(total_generators, 8),
@@ -1170,6 +1170,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
