@@ -266,7 +266,7 @@ def api_readings():
             total_generators = generator_1_total + generator_2_total
 
             readings.append({
-                "measurementStartTime": current_start.strftime("%Y-%m-%d%TH:%M:%SZ"),
+                "measurementStartTime": current_start.strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "measurementEndTime": (current_end - timedelta(seconds=1)).strftime("%Y-%m-%dT%H:%M:%SZ"),
                 "kind": "VESSEL",
                 "mmsi": "419001491",
@@ -1170,6 +1170,7 @@ def download_pdf():
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)
+
 
 
 
