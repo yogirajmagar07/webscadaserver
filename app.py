@@ -82,7 +82,11 @@ def logout():
 @login_required
 def dashboard():
     return render_template("index.html")
-
+# Dashboard Tauras 24
+@app.route('/tauras_dashboard')
+@login_required
+def dashboard():
+    return render_template("tauras.html")
 
 # =========================
 # REPORT PAGE
